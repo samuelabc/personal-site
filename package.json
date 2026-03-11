@@ -1,0 +1,17 @@
+{
+  "name": "samuel-personal-site",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp"]
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "astro": "^6.0.2",
+    "tailwindcss": "^4.2.1"
+  }
+}

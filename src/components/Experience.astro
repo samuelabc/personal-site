@@ -1,0 +1,125 @@
+---
+import SectionHeader from "./SectionHeader.astro";
+
+const jobs = [
+  {
+    year: "2024 — Now",
+    role: "Full Stack Engineer",
+    company: "Mercedes-Benz",
+    summary:
+      "Building secure internal platforms on the Cloud Security team, with a strong backend foundation and product-minded frontend delivery.",
+    highlights: [
+      "Design and ship security-facing workflows for internal users",
+      "Build backend services and integrations with reliability in mind",
+      "Collaborate across product, engineering, and security stakeholders",
+    ],
+    stack: ["Golang", "TypeScript", "React", "AWS", "Terraform"],
+  },
+  {
+    year: "Apr — Aug 2024",
+    role: "Software Engineer (Backend)",
+    company: "Ola Chat",
+    summary:
+      "Focused on backend engineering for a fast-moving chat product, emphasizing speed of delivery and production readiness.",
+    highlights: [
+      "Implemented APIs and backend logic for messaging features",
+      "Worked on service performance, debugging, and deployment flow",
+      "Partnered closely with frontend engineers for smooth integration",
+    ],
+    stack: ["Node.js", "TypeScript", "PostgreSQL", "Redis", "Docker"],
+  },
+  {
+    year: "2021 — 2024",
+    role: "Full Stack Developer",
+    company: "Life Line Lab",
+    summary:
+      "Delivered end-to-end web and mobile features across product cycles, helping shape both architecture and user experience.",
+    highlights: [
+      "Built and maintained full-stack features from UI to API",
+      "Contributed to application architecture and code quality practices",
+      "Worked across web and mobile surfaces with cross-functional teams",
+    ],
+    stack: ["React", "React Native", "Node.js", "PostgreSQL", "Flutter"],
+  },
+];
+---
+
+<section class="py-16 border-b-3 border-ink reveal" id="experience">
+  <SectionHeader num="03" title="Experience" />
+
+  <div class="mb-8 flex items-center justify-between gap-4">
+    <p class="max-w-[690px] text-[15px] leading-[1.7] text-ink-soft">
+      Roles across enterprise security, startup backend, and full-stack product
+      delivery. Different contexts, same approach: build things that are useful,
+      fast, and resilient.
+    </p>
+    <span
+      class="hidden md:inline-flex items-center gap-2 border-2 border-ink px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] bg-bg-card"
+    >
+      <span class="inline-block h-2 w-2 rounded-full bg-accent animate-[pulse_1.7s_ease-in-out_infinite]"></span>
+      Building since 2021
+    </span>
+  </div>
+
+  <div class="space-y-3">
+    {
+      jobs.map((job, index) => (
+        <article
+          class="group relative border-3 border-ink bg-bg-card transition-all duration-300 ease-smooth hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_var(--color-ink)]"
+        >
+          <div class="absolute left-0 top-0 h-full w-2 bg-ink transition-colors duration-300 ease-smooth group-hover:bg-accent">
+          </div>
+
+          <div class="grid md:grid-cols-[165px_1fr] gap-0">
+            <div class="border-b-3 md:border-b-0 md:border-r-3 border-ink px-5 py-4 md:py-5 bg-bg flex items-center">
+              <div class="font-mono text-xs tracking-[0.05em] text-ink-muted">
+                {job.year}
+              </div>
+            </div>
+
+            <div class="px-6 py-5">
+              <div class="flex flex-wrap items-start justify-between gap-2">
+                <h3 class="font-display text-base uppercase tracking-[0.02em]">
+                  {job.role}
+                </h3>
+                <span class="font-serif italic text-xl text-ink-muted">
+                  {job.company}
+                </span>
+              </div>
+
+              <p class="mt-3 text-[15px] leading-[1.7] text-ink-soft max-w-[760px]">
+                {job.summary}
+              </p>
+
+              <ul class="mt-4 space-y-1.5 text-[14px] text-ink-soft leading-[1.65]">
+                {
+                  job.highlights.map((item) => (
+                    <li class="flex items-start gap-2">
+                      <span class="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 bg-accent"></span>
+                      <span>{item}</span>
+                    </li>
+                  ))
+                }
+              </ul>
+
+              <div class="mt-4 flex flex-wrap gap-1.5">
+                {
+                  job.stack.map((tech) => (
+                    <span class="font-mono text-[10px] uppercase tracking-[0.08em] px-2.5 py-1 border border-[#ccc5b8] text-ink-muted transition-all duration-200 ease-smooth group-hover:border-accent group-hover:text-accent">
+                      {tech}
+                    </span>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+          {
+            index < jobs.length - 1 && (
+              <div class="pointer-events-none absolute -bottom-[11px] left-8 h-[20px] w-[2px] bg-ink/35"></div>
+            )
+          }
+        </article>
+      ))
+    }
+  </div>
+</section>

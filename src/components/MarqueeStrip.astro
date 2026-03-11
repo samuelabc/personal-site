@@ -1,0 +1,26 @@
+---
+const items = [
+  "Full Stack Engineer",
+  "Mercedes-Benz Cloud Security",
+  "Golang + React",
+  "Based in KL, Malaysia",
+  "Open to collaborate",
+];
+---
+
+<div
+  class="overflow-hidden border-b-3 border-ink bg-ink py-2.5 whitespace-nowrap"
+>
+  <div class="inline-flex animate-[marquee_25s_linear_infinite]">
+    {
+      [...items, ...items].map((text) => (
+        <>
+          <span class="font-mono text-[11px] uppercase tracking-[0.15em] px-8 text-bg">
+            {text}
+          </span>
+          <span class="font-mono text-[11px] px-0 text-accent">✦</span>
+        </>
+      ))
+    }
+  </div>
+</div>

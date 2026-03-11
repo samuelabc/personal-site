@@ -1,0 +1,78 @@
+---
+import SectionHeader from "./SectionHeader.astro";
+
+const projects = [
+  {
+    num: "01",
+    name: "Schedule Hero",
+    desc: "A personal schedule management web app with separate interfaces for users and administrators.",
+    tags: ["React", "Node.js", "MongoDB", "Express"],
+    href: "https://web-schedulehero.onrender.com",
+  },
+  {
+    num: "02",
+    name: "C-like Compiler",
+    desc: "A compiler that translates a C-like programming language into MIPS machine code, executable on a MIPS CPU.",
+    tags: ["C++", "MIPS"],
+    href: "https://github.com/samuelabc/C-like-compiler-project",
+  },
+  {
+    num: "03",
+    name: "School Management System",
+    desc: "A web app for managing class schedules with separate interfaces for students, teachers, and admins.",
+    tags: ["React", "Node.js", "MySQL", "Express"],
+    href: "https://github.com/samuelabc/school_management_system_v2",
+  },
+  {
+    num: "04",
+    name: "Mini MIPS CPU",
+    desc: "A five-stage pipelined MIPS CPU implemented in Verilog HDL, supporting the basic MIPS instruction set.",
+    tags: ["Verilog HDL", "MIPS"],
+    href: "https://github.com/samuelabc/BUAA_ComputerOrganizationLab",
+  },
+];
+---
+
+<section class="py-16 border-b-3 border-ink reveal" id="projects">
+  <SectionHeader num="02" title="Selected Work" />
+
+  <div class="flex flex-col gap-1.5">
+    {
+      projects.map((project) => (
+        <a
+          href={project.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group grid grid-cols-[80px_1fr_auto] items-stretch border-3 border-ink bg-bg-card relative overflow-hidden transition-all duration-[350ms] ease-smooth hover:translate-x-1.5 hover:border-accent no-underline text-inherit"
+        >
+          {/* Orange wash on hover */}
+          <span class="absolute inset-0 w-0 bg-accent/[0.06] transition-[width] duration-500 ease-smooth group-hover:w-full z-0" />
+
+          <span class="bg-ink text-bg font-mono text-[13px] font-bold flex items-center justify-center relative z-10 transition-colors duration-[350ms] ease-smooth group-hover:bg-accent">
+            {project.num}
+          </span>
+
+          <span class="px-7 py-6 relative z-10">
+            <span class="font-display text-xl uppercase tracking-[0.02em] block mb-1.5">
+              {project.name}
+            </span>
+            <span class="text-sm text-ink-soft leading-relaxed block mb-2.5">
+              {project.desc}
+            </span>
+            <span class="flex gap-1.5">
+              {project.tags.map((tag) => (
+                <span class="font-mono text-[10px] uppercase tracking-[0.08em] bg-ink text-bg px-2 py-0.5">
+                  {tag}
+                </span>
+              ))}
+            </span>
+          </span>
+
+          <span class="flex items-center justify-center px-7 text-2xl relative z-10 transition-transform duration-300 ease-smooth group-hover:translate-x-1.5">
+            →
+          </span>
+        </a>
+      ))
+    }
+  </div>
+</section>

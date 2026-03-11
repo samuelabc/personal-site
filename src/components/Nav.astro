@@ -1,0 +1,30 @@
+---
+const links = [
+  { label: "Work", href: "#projects" },
+  { label: "Experience", href: "#experience" },
+  { label: "Publication", href: "#publication" },
+  { label: "Say Hi", href: "#contact" },
+];
+---
+
+<nav
+  class="sticky top-0 z-50 flex items-center justify-between border-b-3 border-ink bg-bg px-10 py-4"
+>
+  <div class="font-display text-lg uppercase tracking-[0.05em]">
+    Samuel Thien<span
+      class="ml-0.5 inline-block h-2 w-2 rounded-full bg-accent animate-[pulse_2s_ease-in-out_infinite]"
+    ></span>
+  </div>
+  <div class="flex gap-2">
+    {
+      links.map((link) => (
+        <a
+          href={link.href}
+          class="font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted px-3 py-1.5 border border-transparent transition-all duration-250 ease-smooth hover:text-ink hover:border-ink"
+        >
+          {link.label}
+        </a>
+      ))
+    }
+  </div>
+</nav>
