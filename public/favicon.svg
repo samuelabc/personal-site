@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Samuel Thien favicon">
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="#faf7f2" />
+  <text
+    x="32"
+    y="32"
+    fill="#1a1a1a"
+    font-family="'Palatino Linotype', 'Book Antiqua', Palatino, 'Times New Roman', serif"
+    font-size="36"
+    font-style="italic"
+    font-weight="700"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="-0.9"
+  >
+    ST
+  </text>
+</svg>
