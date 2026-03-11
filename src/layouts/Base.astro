@@ -32,23 +32,107 @@ const {
   <body class="overflow-x-hidden">
     <MarqueeStrip />
     <Nav />
-    <main class="mx-auto max-w-[1100px] px-10">
+    <main class="mx-auto max-w-[1100px] px-5 sm:px-10">
       <slot />
     </main>
     <Footer />
+    <div class="custom-cursor" aria-hidden="true">
+      <span class="custom-cursor__ring"></span>
+      <span class="custom-cursor__dot"></span>
+      <span class="custom-cursor__label"></span>
+    </div>
 
     <script>
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("visible");
-            }
-          });
-        },
-        { threshold: 0.1 },
-      );
-      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+      (() => {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("visible");
+              }
+            });
+          },
+          { threshold: 0.1 },
+        );
+        document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+
+        const canUseCustomCursor =
+          window.matchMedia("(pointer: fine)").matches &&
+          !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (!canUseCustomCursor) return;
+
+        const cursor = document.querySelector(".custom-cursor");
+        if (!(cursor instanceof HTMLElement)) return;
+
+        const ring = cursor.querySelector(".custom-cursor__ring");
+        const dot = cursor.querySelector(".custom-cursor__dot");
+        const label = cursor.querySelector(".custom-cursor__label");
+
+        if (
+          !(ring instanceof HTMLElement) ||
+          !(dot instanceof HTMLElement) ||
+          !(label instanceof HTMLElement)
+        ) {
+          return;
+        }
+
+        document.body.classList.add("custom-cursor-enabled");
+
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        let ringX = mouseX;
+        let ringY = mouseY;
+
+        const updatePointerTarget = (target: EventTarget | null) => {
+          if (!(target instanceof Element)) {
+            cursor.classList.remove("is-active");
+            label.textContent = "";
+            return;
+          }
+
+          const interactive = target.closest("[data-cursor-label], a, button");
+          const cursorLabel = interactive?.getAttribute("data-cursor-label");
+
+          if (interactive && cursorLabel) {
+            cursor.classList.add("is-active");
+            label.textContent = cursorLabel;
+            return;
+          }
+
+          cursor.classList.remove("is-active");
+          label.textContent = "";
+        };
+
+        window.addEventListener(
+          "mousemove",
+          (event) => {
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+
+            dot.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
+            label.style.transform = `translate3d(${mouseX + 18}px, ${mouseY + 16}px, 0)`;
+            updatePointerTarget(event.target);
+          },
+          { passive: true },
+        );
+
+        const animateRing = () => {
+          ringX += (mouseX - ringX) * 0.2;
+          ringY += (mouseY - ringY) * 0.2;
+          ring.style.transform = `translate3d(${ringX}px, ${ringY}px, 0)`;
+          requestAnimationFrame(animateRing);
+        };
+        animateRing();
+
+        window.addEventListener("mouseout", () => {
+          cursor.classList.remove("is-visible");
+        });
+
+        window.addEventListener("mouseover", () => {
+          cursor.classList.add("is-visible");
+        });
+      })();
     </script>
   </body>
 </html>

@@ -10,15 +10,16 @@ const items = [
 
 <div
   class="overflow-hidden border-b-3 border-ink bg-ink py-2.5 whitespace-nowrap"
+  aria-hidden="true"
 >
   <div class="inline-flex animate-[marquee_25s_linear_infinite]">
     {
       [...items, ...items].map((text) => (
         <>
-          <span class="font-mono text-[11px] uppercase tracking-[0.15em] px-8 text-bg">
+          <span class="font-mono text-[10px] sm:text-[11px] uppercase tracking-[0.15em] px-4 sm:px-8 text-bg">
             {text}
           </span>
-          <span class="font-mono text-[11px] px-0 text-accent">✦</span>
+          <span class="font-mono text-[10px] sm:text-[11px] px-0 text-accent">✦</span>
         </>
       ))
     }

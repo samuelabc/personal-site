@@ -8,23 +8,31 @@ const links = [
 ---
 
 <nav
-  class="sticky top-0 z-50 flex items-center justify-between border-b-3 border-ink bg-bg px-10 py-4"
+  class="sticky top-0 z-50 flex items-center justify-between border-b-3 border-ink bg-bg px-4 sm:px-10 py-3 sm:py-4 gap-2"
 >
-  <div class="font-display text-lg uppercase tracking-[0.05em]">
+  <a href="/" data-cursor-label="Home" class="font-display text-sm sm:text-lg uppercase tracking-[0.05em] no-underline text-inherit shrink-0">
     Samuel Thien<span
       class="ml-0.5 inline-block h-2 w-2 rounded-full bg-accent animate-[pulse_2s_ease-in-out_infinite]"
     ></span>
-  </div>
-  <div class="flex gap-2">
+  </a>
+  <div class="hidden sm:flex gap-2">
     {
       links.map((link) => (
         <a
           href={link.href}
-          class="font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted px-3 py-1.5 border border-transparent transition-all duration-250 ease-smooth hover:text-ink hover:border-ink"
+          data-cursor-label="Jump"
+          class="font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted px-3 py-1.5 border border-transparent transition-[color,border-color] duration-250 ease-smooth hover:text-ink hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {link.label}
         </a>
       ))
     }
   </div>
+  <a
+    href="#contact"
+    data-cursor-label="Jump"
+    class="sm:hidden font-mono text-[10px] uppercase tracking-[0.1em] text-ink-muted px-2 py-1.5 border border-ink transition-[color,border-color] duration-250 ease-smooth hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+  >
+    Say Hi
+  </a>
 </nav>

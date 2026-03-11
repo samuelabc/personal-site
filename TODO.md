@@ -2,16 +2,16 @@
 
 ## Immediate — Replace Placeholders
 
-- [ ] Replace "Samuel" with your full name across Nav, Hero, Footer
-- [ ] Write real hero tagline and description
-- [ ] Write real About section copy (who you are, what drives you)
+- [x] Replace "Samuel" with your full name across Nav, Hero, Footer
+- [x] Write real hero tagline and description
+- [x] Write real About section copy (who you are, what drives you)
 - [ ] Add your photo to the About section (`src/components/About.astro`)
-- [ ] Add real projects with titles, descriptions, links, and tags
-- [ ] Add real experience entries (roles, companies, dates)
+- [x] Add real projects with titles, descriptions, links, and tags
+- [x] Add real experience entries (roles, companies, dates)
 - [ ] Add real blog posts or remove the Writing section for now
 - [ ] Update social links in Footer (GitHub, Twitter/X, LinkedIn URLs)
-- [ ] Set contact email in the "Get in Touch" button (`src/components/Contact.astro`)
-- [ ] Update marquee strip text to match your actual status
+- [x] Set contact email in the "Get in Touch" button (`src/components/Contact.astro`)
+- [x] Update marquee strip text to match your actual status
 
 ## Content Infrastructure
 
@@ -26,7 +26,7 @@
 ## Design Polish
 
 - [ ] Add a dark mode toggle (brutalist dark: near-black bg, cream text, keep coral accent)
-- [ ] Improve mobile layout — stack About grid vertically, adjust hero font size
+- [x] Improve mobile layout — stack About grid vertically, adjust hero font size
 - [ ] Add staggered reveal to project cards (delay each by 100ms)
 - [ ] Add a custom cursor or cursor trail as a signature detail
 - [ ] Add a "back to top" button that appears on scroll
@@ -37,8 +37,8 @@
 ## Performance & SEO
 
 - [ ] Optimize font loading (swap display strategy, subset fonts)
-- [ ] Add `loading="lazy"` to images
-- [ ] Pre-render all pages at build time (Astro default — verify)
+- [x] Add `loading="lazy"` to images
+- [x] Pre-render all pages at build time (Astro default — verify)
 - [ ] Run Lighthouse audit and address any flags
 - [ ] Add structured data (JSON-LD) for person schema
 - [ ] Ensure all interactive elements are keyboard accessible
