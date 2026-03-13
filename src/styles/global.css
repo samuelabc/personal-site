@@ -16,6 +16,7 @@
   --font-body: "DM Sans", sans-serif;
 
   --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 ::selection {
@@ -159,8 +160,351 @@ body.custom-cursor-enabled button {
   50% { transform: scale(1.4); opacity: 0.6; }
 }
 
+/* Softer status pulse with long rest */
+@keyframes pulse-soft {
+  0%, 68%, 100% { transform: scale(1); opacity: 0.9; }
+  14% { transform: scale(1.22); opacity: 1; }
+  22% { transform: scale(1); opacity: 0.9; }
+}
+
+.hero-wave {
+  animation: wave 1.7s var(--ease-emphasis) 180ms 1 both;
+}
+
+.hero-wave:hover {
+  animation: wave 1.4s var(--ease-emphasis) 1;
+}
+
+.status-dot {
+  animation: pulse-soft 3.6s var(--ease-smooth) infinite;
+}
+
+.marquee-track {
+  animation: marquee 32s linear infinite;
+  will-change: transform;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+.pressable {
+  transition: transform 130ms var(--ease-emphasis);
+}
+
+.pressable-soft:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.pressable-strong:active {
+  transform: translateY(2px) scale(0.978);
+}
+
+.card-pressable {
+  transition: transform 150ms var(--ease-emphasis);
+}
+
+.card-pressable:active {
+  transform: translateX(2px) scale(0.997);
+}
+
+.card-pressable-strong:active {
+  transform: translateX(5px) scale(0.994);
+}
+
+.project-card-glint {
+  transition:
+    transform 320ms var(--ease-smooth),
+    border-color 320ms var(--ease-smooth),
+    box-shadow 320ms var(--ease-smooth);
+}
+
+.reveal .project-reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 460ms var(--ease-smooth),
+    transform 460ms var(--ease-smooth),
+    border-color 320ms var(--ease-smooth),
+    box-shadow 320ms var(--ease-smooth);
+  transition-delay: var(--project-delay, 0ms);
+}
+
+.reveal.visible .project-reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.project-card-glint:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-accent);
+  box-shadow: 8px 8px 0 color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+.project-tag {
+  transition:
+    background-color 220ms var(--ease-smooth),
+    border-color 220ms var(--ease-smooth);
+}
+
+.project-card-glint:hover .project-tag {
+  border-color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
+/* Archive expand/collapse */
+.archive-trigger {
+  animation: archive-nudge 2.4s ease-in-out 1.5s 2;
+}
+
+.archive-trigger:hover {
+  animation: none;
+}
+
+.archive-section[open] .archive-trigger {
+  animation: none;
+  border-style: solid;
+  border-color: var(--ink);
+  opacity: 0.5;
+}
+
+@keyframes archive-nudge {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-3px); }
+  50% { transform: translateY(0); }
+}
+
+.archive-chevron {
+  transition: transform 300ms var(--ease-smooth);
+}
+
+.archive-section[open] .archive-chevron {
+  transform: rotate(180deg);
+}
+
+.archive-section[open] .archive-row {
+  animation: archive-row-in 350ms var(--ease-smooth) both;
+}
+
+.archive-section[open] .archive-row:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.archive-section[open] .archive-row:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+@keyframes archive-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Bookshelf grid */
+.bookshelf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+@media (min-width: 500px) {
+  .bookshelf-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .bookshelf-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+  }
+}
+
+.shelf-edge {
+  height: 10px;
+  margin-top: 1.5rem;
+  border-top: 3px solid var(--color-ink);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--color-ink) 12%, transparent) 0%,
+    color-mix(in oklab, var(--color-ink) 4%, transparent) 60%,
+    transparent 100%
+  );
+  position: relative;
+}
+
+.shelf-edge__grain {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 18px,
+    color-mix(in oklab, var(--color-ink) 3%, transparent) 18px,
+    color-mix(in oklab, var(--color-ink) 3%, transparent) 19px
+  );
+}
+
+/* Book card */
+.book-card {
+  aspect-ratio: 2 / 3;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  border: 3px solid var(--color-ink);
+  overflow: hidden;
+  box-shadow: 4px 4px 0 color-mix(in oklab, var(--color-ink) 10%, transparent);
+  transition:
+    transform 0.4s var(--ease-smooth),
+    box-shadow 0.4s var(--ease-smooth);
+}
+
+.book-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 6px 8px 0 color-mix(in oklab, var(--color-ink) 14%, transparent);
+}
+
+.book-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 6px;
+}
+
+.book-card__spine {
+  position: absolute;
+  left: -3px;
+  top: 4px;
+  bottom: 4px;
+  width: 6px;
+  background: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--color-ink) 20%, transparent),
+    color-mix(in oklab, var(--color-ink) 6%, transparent)
+  );
+  z-index: -1;
+  transform: translateX(-3px);
+  transition: opacity 0.5s var(--ease-smooth);
+}
+
+.book-card:hover .book-card__spine {
+  opacity: 0;
+}
+
+.book-card__cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.book-card__cover--typo {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.book-card__vignette {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+.book-card__year-badge {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 3px 6px;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  z-index: 10;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.35s var(--ease-smooth),
+    transform 0.35s var(--ease-smooth);
+}
+
+.book-card:hover .book-card__year-badge {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Note page hero */
+.book-note-hero {
+  padding: 0.5rem 0 0;
+}
+
+.book-note-cover img {
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+/* View transition tuning */
+::view-transition-group(*) {
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(root) {
+  animation-duration: 0.25s;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Respect reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
+  .hero-wave,
+  .status-dot,
+  .marquee-track {
+    animation: none !important;
+  }
+
+  .pressable:active,
+  .pressable-soft:active,
+  .pressable-strong:active,
+  .card-pressable:active,
+  .project-card-glint:hover,
+  .project-card-glint:hover .project-tag {
+    transform: none !important;
+  }
+
+  .card-pressable-strong:active {
+    transform: none !important;
+  }
+
+  .book-card:hover {
+    transform: none !important;
+  }
+
+  .archive-trigger,
+  .archive-section[open] .archive-row {
+    animation: none !important;
+  }
+
+  .project-reveal,
+  .reveal .project-reveal,
+  .reveal.visible .project-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
   .reveal {
     opacity: 1;
     transform: none;
@@ -179,6 +523,137 @@ body.custom-cursor-enabled button {
 
 @media (hover: none), (pointer: coarse) {
   .custom-cursor {
+    display: none;
+  }
+}
+
+/* ── Mobile hamburger icon ── */
+.mobile-burger {
+  width: 20px;
+  height: 14px;
+  position: relative;
+}
+
+.mobile-burger__line {
+  display: block;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2.5px;
+  background: var(--color-ink);
+  transition:
+    transform 320ms var(--ease-smooth),
+    opacity 200ms var(--ease-smooth);
+}
+
+.mobile-burger__line--1 { top: 0; }
+.mobile-burger__line--2 { top: 50%; transform: translateY(-50%); }
+.mobile-burger__line--3 { bottom: 0; }
+
+.mobile-burger.is-open .mobile-burger__line--1 {
+  transform: translateY(5.5px) rotate(45deg);
+}
+
+.mobile-burger.is-open .mobile-burger__line--2 {
+  opacity: 0;
+  transform: translateY(-50%) scaleX(0);
+}
+
+.mobile-burger.is-open .mobile-burger__line--3 {
+  transform: translateY(-5.5px) rotate(-45deg);
+}
+
+/* ── Mobile full-screen menu ── */
+.mobile-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 280ms var(--ease-smooth);
+}
+
+.mobile-menu.is-open {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.mobile-menu__inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  padding: 5rem 2rem 2rem;
+}
+
+.mobile-menu__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mobile-menu__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 0;
+  border-bottom: 2px solid color-mix(in oklab, var(--color-ink) 12%, transparent);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 6vw, 2.25rem);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-ink);
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 350ms var(--ease-smooth),
+    transform 350ms var(--ease-smooth),
+    color 200ms var(--ease-smooth);
+  transition-delay: calc(80ms * var(--link-index));
+}
+
+.mobile-menu.is-open .mobile-menu__link {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mobile-menu__link:active {
+  color: var(--color-accent);
+}
+
+.mobile-menu__link-arrow {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--color-ink-muted);
+  transition: transform 200ms var(--ease-smooth);
+}
+
+.mobile-menu__link:active .mobile-menu__link-arrow {
+  transform: translateX(4px);
+}
+
+.mobile-menu__footer {
+  margin-top: auto;
+  padding: 1.5rem 0;
+  border-top: 2px solid color-mix(in oklab, var(--color-ink) 12%, transparent);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 350ms var(--ease-smooth) 350ms,
+    transform 350ms var(--ease-smooth) 350ms;
+}
+
+.mobile-menu.is-open .mobile-menu__footer {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (min-width: 640px) {
+  .mobile-menu {
     display: none;
   }
 }

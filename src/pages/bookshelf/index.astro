@@ -1,0 +1,36 @@
+---
+import Base from "../../layouts/Base.astro";
+import BookshelfSection from "../../components/BookshelfSection.astro";
+import { books } from "../../data/books";
+
+const generalBooks = books.filter((b) => b.category === "general");
+const technicalBooks = books.filter((b) => b.category === "technical");
+---
+
+<Base title="Bookshelf — Samuel Thien">
+  <section class="pt-10 sm:pt-16 pb-0">
+    <div class="mb-10 sm:mb-14 reveal">
+      <div class="flex items-start gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <span
+          class="font-mono text-[10px] sm:text-[11px] text-ink-muted uppercase tracking-[0.14em] mt-3 sm:mt-5 shrink-0"
+          aria-hidden="true"
+        >
+          pg. III
+        </span>
+        <h1
+          class="font-display text-5xl sm:text-7xl lg:text-[5.5rem] uppercase tracking-[0.04em] leading-[0.88]"
+        >
+          Book<br class="sm:hidden" />shelf
+        </h1>
+      </div>
+      <p
+        class="font-serif text-xl sm:text-2xl italic text-ink-soft max-w-md leading-relaxed ml-0 sm:ml-[72px]"
+      >
+        Classics, systems, and ideas that shaped my thinking.
+      </p>
+    </div>
+
+    <BookshelfSection num="01" title="General Reading" books={generalBooks} />
+    <BookshelfSection num="02" title="Technical Reading" books={technicalBooks} />
+  </section>
+</Base>

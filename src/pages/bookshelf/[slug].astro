@@ -1,0 +1,70 @@
+---
+import Base from "../../layouts/Base.astro";
+import { books, type Book } from "../../data/books";
+
+export function getStaticPaths() {
+  return books.map((book) => ({
+    params: { slug: book.slug },
+    props: { book },
+  }));
+}
+
+interface Props {
+  book: Book;
+}
+
+const { book } = Astro.props;
+const stars = "★".repeat(book.rating) + "☆".repeat(5 - book.rating);
+---
+
+<Base title={`${book.title} — Bookshelf`}>
+  <section class="pt-8 sm:pt-14 pb-20">
+    <a
+      href="/bookshelf"
+      data-cursor-label="Back"
+      class="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted mb-10 sm:mb-14 transition-colors duration-200 hover:text-accent"
+    >
+      <span aria-hidden="true">&larr;</span> Bookshelf
+    </a>
+
+    <div class="book-note-hero">
+      <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr] gap-8 sm:gap-10 lg:gap-14">
+        {book.cover && (
+          <div
+            class="book-note-cover mx-auto sm:mx-0 w-[140px] sm:w-full"
+            transition:name={`book-${book.slug}`}
+          >
+            <img
+              src={book.cover}
+              alt={`Cover of ${book.title}`}
+              class="w-full border-3 border-ink shadow-[6px_6px_0_rgba(0,0,0,0.1)]"
+            />
+          </div>
+        )}
+
+        <div class="flex flex-col justify-center">
+          <h1 class="font-display text-3xl sm:text-4xl lg:text-5xl uppercase tracking-[0.03em] leading-[0.92] mb-4 sm:mb-5">
+            {book.title}
+          </h1>
+          <div class="font-mono text-[11px] sm:text-xs text-ink-muted uppercase tracking-[0.12em] mb-3">
+            {book.author}&ensp;&middot;&ensp;Read in {book.year}
+          </div>
+          <div class="font-serif text-accent text-xl sm:text-2xl tracking-wide select-none" aria-label={`Rated ${book.rating} out of 5`}>
+            {stars}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="border-t border-ink/20 mt-8 sm:mt-10 pt-6 sm:pt-8">
+      <div class="font-mono text-[10px] text-ink-muted uppercase tracking-[0.14em] mb-6 sm:mb-8">
+        Notes
+      </div>
+      <div class="max-w-2xl">
+        <p class="font-serif text-lg sm:text-xl italic text-ink-soft leading-relaxed">
+          {book.note}
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>

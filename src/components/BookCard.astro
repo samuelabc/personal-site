@@ -1,0 +1,85 @@
+---
+interface Props {
+  title: string;
+  slug: string;
+  author: string;
+  cover?: string;
+  rating: number;
+  note: string;
+  year: string;
+  color?: string;
+}
+
+const { title, slug, author, cover, year, color = "#6b3a3a" } = Astro.props;
+---
+
+<div
+  class="book-card"
+  tabindex="0"
+  data-cursor-label="Read notes"
+  data-book-slug={slug}
+  transition:name={`book-${slug}`}
+>
+  <div class="book-card__spine" aria-hidden="true"></div>
+  {
+    cover ? (
+      <img
+        src={cover}
+        alt={`Cover of ${title}`}
+        class="book-card__cover"
+        loading="lazy"
+      />
+    ) : (
+      <div
+        class="book-card__cover book-card__cover--typo"
+        style={`background-color:${color}`}
+      >
+        <div class="absolute inset-[5px] border-2 border-white/10 pointer-events-none" />
+        <div class="relative z-10">
+          <div class="font-serif text-white/90 text-sm sm:text-base leading-snug italic">
+            {title}
+          </div>
+        </div>
+        <div class="relative z-10">
+          <div class="w-8 h-[2px] bg-white/25 mb-2" />
+          <div class="font-mono text-[8px] sm:text-[9px] text-white/55 uppercase tracking-[0.14em]">
+            {author}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  <div class="book-card__year-badge" aria-hidden="true">
+    Read in {year}
+  </div>
+  <div class="book-card__vignette" aria-hidden="true"></div>
+</div>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+
+  function initBookCards() {
+    document
+      .querySelectorAll<HTMLElement>(".book-card[data-book-slug]")
+      .forEach((card) => {
+        if (card.dataset.bookBound) return;
+        card.dataset.bookBound = "1";
+
+        card.addEventListener("click", () => {
+          const slug = card.dataset.bookSlug;
+          if (!slug) return;
+          navigate(`/bookshelf/${slug}`);
+        });
+
+        card.addEventListener("keydown", (e: KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            card.click();
+          }
+        });
+      });
+  }
+
+  initBookCards();
+  document.addEventListener("astro:page-load", initBookCards);
+</script>

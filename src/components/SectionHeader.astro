@@ -7,14 +7,13 @@ interface Props {
 const { num, title } = Astro.props;
 ---
 
-<div class="flex items-center gap-4 mb-10">
+<div class="flex items-center gap-4 sm:gap-5 mb-6 sm:mb-8">
   <div
-    class="font-mono text-[11px] bg-ink text-bg w-8 h-8 flex items-center justify-center shrink-0"
+    class="font-mono text-[11px] sm:text-xs bg-ink text-bg w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shrink-0 font-bold"
   >
     {num}
   </div>
-  <div class="font-display text-[13px] uppercase tracking-[0.15em]">
+  <div class="font-display text-sm sm:text-base uppercase tracking-[0.12em]">
     {title}
   </div>
-  <div class="flex-1 h-px bg-rule"></div>
 </div>

@@ -1,0 +1,37 @@
+---
+import SectionHeader from "./SectionHeader.astro";
+import BookCard from "./BookCard.astro";
+
+interface Book {
+  title: string;
+  slug: string;
+  author: string;
+  cover?: string;
+  rating: number;
+  note: string;
+  year: string;
+  color?: string;
+}
+
+interface Props {
+  num: string;
+  title: string;
+  books: Book[];
+}
+
+const { num, title, books } = Astro.props;
+---
+
+<section class="py-8 sm:py-12">
+  <SectionHeader num={num} title={title} />
+
+  <div class="bookshelf-grid">
+    {
+      books.map((book, i) => (
+        <div class="reveal" style={`transition-delay:${i * 120}ms`}>
+          <BookCard {...book} />
+        </div>
+      ))
+    }
+  </div>
+</section>

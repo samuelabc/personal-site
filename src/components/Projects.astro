@@ -1,78 +1,200 @@
 ---
 import SectionHeader from "./SectionHeader.astro";
+import { projects } from "../data/projects";
 
-const projects = [
-  {
-    num: "01",
-    name: "Schedule Hero",
-    desc: "A personal schedule management web app with separate interfaces for users and administrators.",
-    tags: ["React", "Node.js", "MongoDB", "Express"],
-    href: "https://web-schedulehero.onrender.com",
-  },
-  {
-    num: "02",
-    name: "C-like Compiler",
-    desc: "A compiler that translates a C-like programming language into MIPS machine code, executable on a MIPS CPU.",
-    tags: ["C++", "MIPS"],
-    href: "https://github.com/samuelabc/C-like-compiler-project",
-  },
-  {
-    num: "03",
-    name: "School Management System",
-    desc: "A web app for managing class schedules with separate interfaces for students, teachers, and admins.",
-    tags: ["React", "Node.js", "MySQL", "Express"],
-    href: "https://github.com/samuelabc/school_management_system_v2",
-  },
-  {
-    num: "04",
-    name: "Mini MIPS CPU",
-    desc: "A five-stage pipelined MIPS CPU implemented in Verilog HDL, supporting the basic MIPS instruction set.",
-    tags: ["Verilog HDL", "MIPS"],
-    href: "https://github.com/samuelabc/BUAA_ComputerOrganizationLab",
-  },
-];
+const featured = projects.filter((p) => p.featured);
+const archived = projects.filter((p) => !p.featured);
 ---
 
 <section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="projects">
   <SectionHeader num="02" title="Selected Work" />
 
-  <div class="flex flex-col gap-1.5">
-    {
-      projects.map((project) => (
-        <a
-          href={project.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-cursor-label="View"
-          class="group grid grid-cols-[50px_1fr_auto] sm:grid-cols-[80px_1fr_auto] items-stretch border-3 border-ink bg-bg-card relative overflow-hidden transition-[transform,border-color] duration-[350ms] ease-smooth hover:translate-x-1.5 hover:border-accent no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <span class="absolute inset-0 w-0 bg-accent/[0.06] transition-[width] duration-500 ease-smooth group-hover:w-full z-0" />
-
-          <span class="bg-ink text-bg font-mono text-[11px] sm:text-[13px] font-bold flex items-center justify-center relative z-10 transition-[background-color] duration-[350ms] ease-smooth group-hover:bg-accent">
-            {project.num}
-          </span>
-
-          <span class="px-4 sm:px-7 py-4 sm:py-6 relative z-10">
-            <span class="font-display text-base sm:text-xl uppercase tracking-[0.02em] block mb-1.5">
-              {project.name}
-            </span>
-            <span class="text-sm text-ink-soft leading-relaxed block mb-2.5">
-              {project.desc}
-            </span>
-            <span class="flex flex-wrap gap-1.5">
-              {project.tags.map((tag) => (
-                <span class="font-mono text-[10px] uppercase tracking-[0.08em] bg-ink text-bg px-2 py-0.5">
-                  {tag}
+  <div class="space-y-5">
+    {featured.map((project, idx) => (
+      <article
+        style={`--project-delay: ${90 + idx * 80}ms;`}
+        class="project-reveal project-card-glint group border-3 border-ink bg-bg-card relative overflow-hidden"
+      >
+        <div class="flex flex-col md:flex-row">
+          {/* Screenshot / Typographic fallback */}
+          <div class="relative aspect-[16/10] md:aspect-auto md:w-[42%] shrink-0 border-b-3 md:border-b-0 md:border-r-3 border-ink bg-ink/[0.03] overflow-hidden">
+            {project.screenshot ? (
+              <a
+                href={project.demoUrl || project.githubUrl || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-cursor-label="Preview"
+                class="block h-full"
+              >
+                <img
+                  src={project.screenshot}
+                  alt={`${project.name} screenshot`}
+                  width="800"
+                  height="500"
+                  loading={idx === 0 ? "eager" : "lazy"}
+                  class="w-full h-full object-cover object-top transition-transform duration-500 ease-smooth group-hover:scale-[1.03]"
+                />
+              </a>
+            ) : (
+              <a
+                href={project.demoUrl || project.githubUrl || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-cursor-label="Preview"
+                class="flex items-center justify-center h-full min-h-[200px] md:min-h-0"
+              >
+                <span class="font-display text-[clamp(5rem,12vw,9rem)] uppercase leading-none text-ink/[0.06] select-none transition-transform duration-500 ease-smooth group-hover:scale-110 group-hover:text-accent/[0.12]">
+                  {project.name.charAt(0)}
                 </span>
-              ))}
-            </span>
-          </span>
+              </a>
+            )}
+          </div>
 
-          <span class="hidden sm:flex items-center justify-center px-7 text-2xl relative z-10 transition-transform duration-300 ease-smooth group-hover:translate-x-1.5">
-            →
-          </span>
-        </a>
-      ))
-    }
+          {/* Content */}
+          <div class="flex-1 p-5 sm:p-7 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center gap-3 mb-4">
+                <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted">
+                  {project.year}
+                </span>
+              </div>
+
+              <h3 class="font-display text-xl sm:text-2xl md:text-3xl uppercase tracking-[0.02em] mb-3 leading-tight">
+                {project.name}
+              </h3>
+
+              <p class="font-serif italic text-base sm:text-lg leading-relaxed text-ink-soft mb-5 max-w-xl">
+                {project.intro}
+              </p>
+
+              {/* Tech Stack */}
+              <div class="flex flex-wrap gap-1.5 mb-6">
+                {project.techStack.map((tech) => (
+                  <span class="project-tag font-mono text-[9px] uppercase tracking-[0.08em] border border-ink/60 px-2 py-0.5 text-ink-soft">
+                    {tech}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Links */}
+            <div class="flex flex-wrap items-center gap-2.5">
+              {project.githubUrl && (
+                <a
+                  href={project.githubUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-cursor-label="GitHub"
+                  class="inline-flex items-center gap-2 px-3.5 py-2 border-2 border-ink font-mono text-[10px] uppercase tracking-[0.1em] text-ink bg-transparent transition-all duration-250 ease-smooth hover:bg-ink hover:text-bg hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
+                  <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                  </svg>
+                  Source
+                </a>
+              )}
+              {project.demoUrl && (
+                <a
+                  href={project.demoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-cursor-label="Visit Site"
+                  class="inline-flex items-center gap-2 px-3.5 py-2 border-2 border-ink bg-ink text-bg font-mono text-[10px] uppercase tracking-[0.1em] transition-all duration-250 ease-smooth hover:bg-accent hover:border-accent hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
+                  Live
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 12L12 4M12 4H5M12 4v7" />
+                  </svg>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </article>
+    ))}
   </div>
+
+  {/* Archive */}
+  {archived.length > 0 && (
+    <details class="archive-section mt-10 group/archive">
+      <summary
+        class="archive-trigger flex items-center gap-4 cursor-pointer select-none py-3.5 px-5 list-none [&::-webkit-details-marker]:hidden border-2 border-dashed border-ink/30 hover:border-ink/60 transition-all duration-300 ease-smooth"
+        data-cursor-label="Expand"
+      >
+        <span class="font-mono text-[12px] sm:text-[13px] uppercase tracking-[0.1em] text-ink/70 group-hover/archive:text-accent transition-colors duration-200 font-medium">
+          +{archived.length} more from the archive
+        </span>
+        <span class="flex-1 h-px bg-rule"></span>
+        <span class="archive-chevron text-ink/50 group-hover/archive:text-accent transition-all duration-300 ease-smooth">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+        </span>
+      </summary>
+
+      <div class="archive-content pt-2 pb-2">
+        {archived.map((project, idx) => (
+          <div
+            class:list={[
+              "archive-row py-4 sm:py-5 flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-5",
+              idx < archived.length - 1 && "border-b border-rule",
+            ]}
+          >
+            <div class="sm:w-[220px] shrink-0">
+              <h4 class="font-display text-sm uppercase tracking-[0.02em] leading-tight">
+                {project.name}
+              </h4>
+              <span class="font-mono text-[10px] text-ink-muted tracking-[0.08em] mt-1 block">
+                {project.year}
+              </span>
+            </div>
+
+            <p class="text-sm text-ink-soft leading-relaxed flex-1 min-w-0">
+              {project.intro}
+            </p>
+
+            <div class="flex flex-col gap-1.5 sm:shrink-0 sm:items-end">
+              <div class="flex flex-wrap gap-1 sm:justify-end">
+                {project.techStack.map((tech) => (
+                  <span class="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-muted border border-ink/40 px-1.5 py-0.5">
+                    {tech}
+                  </span>
+                ))}
+              </div>
+              <div class="flex items-center gap-3">
+                {project.githubUrl && (
+                  <a
+                    href={project.githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-cursor-label="GitHub"
+                    class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-soft hover:text-accent transition-colors duration-200"
+                  >
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
+                      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                    </svg>
+                    Code
+                  </a>
+                )}
+                {project.demoUrl && (
+                  <a
+                    href={project.demoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-cursor-label="Demo"
+                    class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-soft hover:text-accent transition-colors duration-200"
+                  >
+                    Demo
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 12L12 4M12 4H5M12 4v7" />
+                    </svg>
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
+  )}
 </section>

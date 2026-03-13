@@ -13,33 +13,36 @@ const jobs = [
       "Build backend services and integrations with reliability in mind",
       "Collaborate across product, engineering, and security stakeholders",
     ],
-    stack: ["Golang", "TypeScript", "React", "AWS", "Terraform"],
+    stack: ["Golang", "Vue", "Azure", "Redis", "Kubernetes", "Kafka"],
   },
   {
     year: "Apr — Aug 2024",
-    role: "Software Engineer (Backend)",
+    role: "Software Engineer",
     company: "Ola Chat",
     summary:
-      "Focused on backend engineering for a fast-moving chat product, emphasizing speed of delivery and production readiness.",
+      "Built high-performance microservices for a large-scale chat platform, optimizing backend systems across a broad technology stack.",
     highlights: [
-      "Implemented APIs and backend logic for messaging features",
-      "Worked on service performance, debugging, and deployment flow",
-      "Partnered closely with frontend engineers for smooth integration",
+      "Developed high-performance microservices using Golang and PHP for scalable messaging infrastructure",
+      "Leveraged MySQL, Redis, Elasticsearch, RPC, and NSQ to optimize backend workflows and data pipelines",
+      "Monitored and improved system health using Grafana, ensuring production reliability at scale",
     ],
-    stack: ["Node.js", "TypeScript", "PostgreSQL", "Redis", "Docker"],
+    stack: ["Golang", "PHP", "MySQL", "Redis", "Elasticsearch", "Grafana"],
   },
   {
     year: "2021 — 2024",
     role: "Full Stack Developer",
     company: "Life Line Lab",
     summary:
-      "Delivered end-to-end web and mobile features across product cycles, helping shape both architecture and user experience.",
+      "Built multiple platforms from scratch — including a marketplace, logistics management system, and healthcare platform — across web and mobile.",
     highlights: [
-      "Built and maintained full-stack features from UI to API",
-      "Contributed to application architecture and code quality practices",
-      "Worked across web and mobile surfaces with cross-functional teams",
+      "Developed and deployed Node.js and Golang microservices end-to-end, from implementation to monitoring",
+      "Built web and mobile apps using React and React Native across multiple product lines",
+      "Implemented Attribute-based Access Control (ABAC) for fine-grained data access across services",
+      "Set up CI/CD pipelines, automated testing workflows, and static code analysis tooling",
+      "Managed ArangoDB databases including initialization, backup, and complex reporting queries",
+      "Integrated with AWS S3 and SES for file management, PDF generation, and email delivery",
     ],
-    stack: ["React", "React Native", "Node.js", "PostgreSQL", "Flutter"],
+    stack: ["React", "React Native", "Node.js", "Golang", "ArangoDB", "AWS", "Docker"],
   },
 ];
 ---
@@ -56,7 +59,7 @@ const jobs = [
     <span
       class="hidden md:inline-flex items-center gap-2 border-2 border-ink px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] bg-bg-card"
     >
-      <span class="inline-block h-2 w-2 rounded-full bg-accent animate-[pulse_1.7s_ease-in-out_infinite]"></span>
+      <span class="status-dot inline-block h-2 w-2 rounded-full bg-accent"></span>
       Building since 2021
     </span>
   </div>
@@ -65,7 +68,7 @@ const jobs = [
     {
       jobs.map((job, index) => (
         <article
-          class="group relative border-3 border-ink bg-bg-card transition-[transform,box-shadow] duration-300 ease-smooth hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_var(--color-ink)]"
+          class="card-pressable group relative border-3 border-ink bg-bg-card transition-[transform,box-shadow] duration-300 ease-smooth hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_var(--color-ink)]"
         >
           <div class="absolute left-0 top-0 h-full w-2 bg-ink transition-[background-color] duration-300 ease-smooth group-hover:bg-accent">
           </div>

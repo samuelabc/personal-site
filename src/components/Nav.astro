@@ -1,9 +1,10 @@
 ---
 const links = [
-  { label: "Work", href: "#projects" },
-  { label: "Experience", href: "#experience" },
-  { label: "Publication", href: "#publication" },
-  { label: "Say Hi", href: "#contact" },
+  { label: "Work", href: "/#projects" },
+  { label: "Experience", href: "/#experience" },
+  { label: "Research", href: "/#publication" },
+  { label: "Bookshelf", href: "/bookshelf" },
+  { label: "Say Hi", href: "/#contact" },
 ];
 ---
 
@@ -11,10 +12,10 @@ const links = [
   class="sticky top-0 z-50 flex items-center justify-between border-b-3 border-ink bg-bg px-4 sm:px-10 py-3 sm:py-4 gap-2"
 >
   <a href="/" data-cursor-label="Home" class="font-display text-sm sm:text-lg uppercase tracking-[0.05em] no-underline text-inherit shrink-0">
-    Samuel Thien<span
-      class="ml-0.5 inline-block h-2 w-2 rounded-full bg-accent animate-[pulse_2s_ease-in-out_infinite]"
-    ></span>
+    Samuel Thien<span class="status-dot ml-0.5 inline-block h-2 w-2 rounded-full bg-accent"></span>
   </a>
+
+  {/* Desktop nav links */}
   <div class="hidden sm:flex gap-2">
     {
       links.map((link) => (
@@ -28,11 +29,98 @@ const links = [
       ))
     }
   </div>
-  <a
-    href="#contact"
-    data-cursor-label="Jump"
-    class="sm:hidden font-mono text-[10px] uppercase tracking-[0.1em] text-ink-muted px-2 py-1.5 border border-ink transition-[color,border-color] duration-250 ease-smooth hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+
+  {/* Mobile hamburger button */}
+  <button
+    id="mobile-menu-toggle"
+    class="sm:hidden relative z-[70] w-10 h-10 flex items-center justify-center"
+    aria-label="Open menu"
+    aria-expanded="false"
+    aria-controls="mobile-menu"
   >
-    Say Hi
-  </a>
+    <div class="mobile-burger" aria-hidden="true">
+      <span class="mobile-burger__line mobile-burger__line--1"></span>
+      <span class="mobile-burger__line mobile-burger__line--2"></span>
+      <span class="mobile-burger__line mobile-burger__line--3"></span>
+    </div>
+  </button>
 </nav>
+
+{/* Mobile full-screen menu */}
+<div
+  id="mobile-menu"
+  class="mobile-menu"
+  aria-hidden="true"
+>
+  <div class="mobile-menu__inner">
+    <nav class="mobile-menu__nav">
+      {
+        links.map((link, i) => (
+          <a
+            href={link.href}
+            class="mobile-menu__link"
+            style={`--link-index: ${i}`}
+          >
+            <span class="mobile-menu__link-label">{link.label}</span>
+            <span class="mobile-menu__link-arrow" aria-hidden="true">&#8594;</span>
+          </a>
+        ))
+      }
+    </nav>
+    <div class="mobile-menu__footer">
+      <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted">
+        Full Stack Engineer &middot; KL, Malaysia
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+  function initMobileMenu() {
+    const toggle = document.getElementById('mobile-menu-toggle');
+    const menu = document.getElementById('mobile-menu');
+    if (!toggle || !menu) return;
+
+    const btn = toggle;
+    const panel = menu;
+    const burger = btn.querySelector('.mobile-burger');
+
+    function openMenu() {
+      panel.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      btn.setAttribute('aria-label', 'Close menu');
+      panel.setAttribute('aria-hidden', 'false');
+      burger?.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeMenu() {
+      panel.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-label', 'Open menu');
+      panel.setAttribute('aria-hidden', 'true');
+      burger?.classList.remove('is-open');
+      document.body.style.overflow = '';
+    }
+
+    btn.addEventListener('click', () => {
+      const isOpen = panel.classList.contains('is-open');
+      if (isOpen) closeMenu();
+      else openMenu();
+    });
+
+    panel.querySelectorAll('.mobile-menu__link').forEach((link) => {
+      link.addEventListener('click', () => closeMenu());
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && panel.classList.contains('is-open')) {
+        closeMenu();
+        btn.focus();
+      }
+    });
+  }
+
+  initMobileMenu();
+  document.addEventListener('astro:page-load', initMobileMenu);
+</script>

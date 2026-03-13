@@ -9,10 +9,10 @@ const items = [
 ---
 
 <div
-  class="overflow-hidden border-b-3 border-ink bg-ink py-2.5 whitespace-nowrap"
+  class="marquee overflow-hidden border-b-3 border-ink bg-ink py-2.5 whitespace-nowrap"
   aria-hidden="true"
 >
-  <div class="inline-flex animate-[marquee_25s_linear_infinite]">
+  <div class="marquee-track inline-flex">
     {
       [...items, ...items].map((text) => (
         <>
