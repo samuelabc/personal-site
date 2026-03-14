@@ -28,6 +28,23 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Keep anchored section titles visible below sticky nav */
+#projects,
+#experience,
+#publication,
+#contact {
+  scroll-margin-top: 4.75rem;
+}
+
+@media (min-width: 640px) {
+  #projects,
+  #experience,
+  #publication,
+  #contact {
+    scroll-margin-top: 5.5rem;
+  }
+}
+
 body {
   font-family: var(--font-body);
   background-color: var(--color-bg);
