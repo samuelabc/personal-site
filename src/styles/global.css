@@ -276,8 +276,10 @@ body.custom-cursor-enabled summary {
   will-change: transform;
 }
 
-.marquee:hover .marquee-track {
-  animation-play-state: paused;
+@media (hover: hover) and (pointer: fine) {
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
 }
 
 .pressable {
