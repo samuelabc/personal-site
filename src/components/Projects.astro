@@ -6,8 +6,8 @@ const featured = projects.filter((p) => p.featured);
 const archived = projects.filter((p) => !p.featured);
 ---
 
-<section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="projects">
-  <SectionHeader num="02" title="Selected Work" />
+<section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="projects" data-reveal="scale-up">
+  <SectionHeader num="02" title="Selected Work" tagline="Things I've shipped, and things I'm proud of." />
 
   <div class="space-y-5">
     {featured.map((project, idx) => (
@@ -63,14 +63,14 @@ const archived = projects.filter((p) => !p.featured);
                 {project.name}
               </h3>
 
-              <p class="font-serif italic text-base sm:text-lg leading-relaxed text-ink-soft mb-5 max-w-xl">
+              <p class="text-[15px] leading-[1.75] text-ink-soft mb-5 max-w-xl">
                 {project.intro}
               </p>
 
               {/* Tech Stack */}
               <div class="flex flex-wrap gap-1.5 mb-6">
                 {project.techStack.map((tech) => (
-                  <span class="project-tag font-mono text-[9px] uppercase tracking-[0.08em] border border-ink/60 px-2 py-0.5 text-ink-soft">
+                  <span class="project-tag font-mono text-[10px] uppercase tracking-[0.08em] border border-ink/60 px-2 py-0.5 text-ink-soft">
                     {tech}
                   </span>
                 ))}
@@ -149,14 +149,14 @@ const archived = projects.filter((p) => !p.featured);
               </span>
             </div>
 
-            <p class="text-sm text-ink-soft leading-relaxed flex-1 min-w-0">
+            <p class="text-[14px] text-ink-soft leading-[1.7] flex-1 min-w-0">
               {project.intro}
             </p>
 
             <div class="flex flex-col gap-1.5 sm:shrink-0 sm:items-end">
               <div class="flex flex-wrap gap-1 sm:justify-end">
                 {project.techStack.map((tech) => (
-                  <span class="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-muted border border-ink/40 px-1.5 py-0.5">
+                  <span class="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted border border-ink/40 px-1.5 py-0.5">
                     {tech}
                   </span>
                 ))}
@@ -198,3 +198,22 @@ const archived = projects.filter((p) => !p.featured);
     </details>
   )}
 </section>
+
+<script>
+  function initArchiveToggleLabel() {
+    document.querySelectorAll<HTMLDetailsElement>(".archive-section").forEach((details) => {
+      if (details.dataset.toggleBound) return;
+      details.dataset.toggleBound = "1";
+
+      const summary = details.querySelector("summary");
+      if (!summary) return;
+
+      details.addEventListener("toggle", () => {
+        summary.setAttribute("data-cursor-label", details.open ? "Collapse" : "Expand");
+      });
+    });
+  }
+
+  initArchiveToggleLabel();
+  document.addEventListener("astro:page-load", initArchiveToggleLabel);
+</script>

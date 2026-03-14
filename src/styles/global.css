@@ -117,16 +117,51 @@ body {
   opacity: 1;
 }
 
+.custom-cursor.is-interactive .custom-cursor__ring {
+  width: 38px;
+  height: 38px;
+  margin-top: -19px;
+  margin-left: -19px;
+  border-color: color-mix(in oklab, var(--color-accent) 55%, var(--color-ink) 45%);
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
 body.custom-cursor-enabled {
   cursor: none;
 }
 
 body.custom-cursor-enabled a,
-body.custom-cursor-enabled button {
+body.custom-cursor-enabled button,
+body.custom-cursor-enabled [data-cursor-label],
+body.custom-cursor-enabled summary {
   cursor: none;
 }
 
-/* Scroll reveal */
+/* ── Hero staggered entrance ── */
+@keyframes heroFadeUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes heroPopIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hero-stagger {
+  opacity: 0;
+  animation-fill-mode: both;
+  animation-timing-function: var(--ease-emphasis);
+}
+
+.hero-stagger-1 { animation: heroFadeUp 600ms 0ms both; }
+.hero-stagger-2 { animation: heroFadeUp 600ms 150ms both; }
+.hero-stagger-3 { animation: heroFadeUp 600ms 300ms both; }
+.hero-stagger-4 { animation: heroFadeUp 600ms 420ms both; }
+.hero-stagger-5 { animation: heroFadeUp 700ms 650ms both; }
+.hero-stagger-6 { animation: heroPopIn 500ms 900ms both; }
+
+/* ── Scroll reveal (default: fade up) ── */
 .reveal {
   opacity: 0;
   transform: translateY(20px);
@@ -136,6 +171,63 @@ body.custom-cursor-enabled button {
 .reveal.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ── Varied section reveals ── */
+.reveal[data-reveal="slide-left"] {
+  transform: translateX(-30px) rotate(-0.5deg);
+  transition: opacity 0.7s var(--ease-emphasis), transform 0.7s var(--ease-emphasis);
+}
+
+.reveal[data-reveal="slide-left"].visible {
+  transform: translateX(0) rotate(0);
+}
+
+.reveal[data-reveal="scale-up"] {
+  transform: scale(0.95);
+  transition: opacity 0.6s var(--ease-emphasis), transform 0.6s var(--ease-emphasis);
+}
+
+.reveal[data-reveal="scale-up"].visible {
+  transform: scale(1);
+}
+
+.reveal[data-reveal="clip-wipe"] {
+  transform: none;
+  clip-path: inset(0 100% 0 0);
+  transition: opacity 0.8s var(--ease-emphasis), clip-path 0.8s var(--ease-emphasis);
+}
+
+.reveal[data-reveal="clip-wipe"].visible {
+  clip-path: inset(0 0 0 0);
+}
+
+.reveal[data-reveal="center-fade"] {
+  transform: scale(0.97);
+  transition: opacity 0.7s var(--ease-emphasis), transform 0.7s var(--ease-emphasis);
+}
+
+.reveal[data-reveal="center-fade"].visible {
+  transform: scale(1);
+}
+
+/* ── Contact word stagger ── */
+.contact-word {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s var(--ease-emphasis), transform 0.5s var(--ease-emphasis);
+}
+
+.reveal.visible .contact-word:nth-child(1) {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 200ms;
+}
+
+.reveal.visible .contact-word:nth-child(2) {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 350ms;
 }
 
 /* Marquee */
@@ -475,6 +567,17 @@ body.custom-cursor-enabled button {
     animation: none !important;
   }
 
+  .hero-stagger {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  .contact-word {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
   .pressable:active,
   .pressable-soft:active,
   .pressable-strong:active,
@@ -508,6 +611,7 @@ body.custom-cursor-enabled button {
   .reveal {
     opacity: 1;
     transform: none;
+    clip-path: none;
     transition: none;
   }
 

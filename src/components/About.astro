@@ -17,7 +17,7 @@ const skills = [
 ];
 ---
 
-<section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="about">
+<section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="about" data-reveal="slide-left">
   <SectionHeader num="01" title="About" />
 
   <div class="grid grid-cols-1 sm:grid-cols-[280px_1fr] gap-8 sm:gap-12 items-start">
@@ -53,7 +53,7 @@ const skills = [
       <div class="flex flex-wrap gap-1.5 mt-5">
         {
           skills.map((skill) => (
-            <span class="font-mono text-[10px] uppercase tracking-[0.08em] px-2.5 py-1 border border-rule text-ink-muted transition-[color,border-color] duration-200 ease-smooth hover:border-accent hover:text-accent">
+            <span class="font-mono text-[10px] uppercase tracking-[0.08em] px-2.5 py-1 border border-rule text-ink-muted">
               {skill}
             </span>
           ))

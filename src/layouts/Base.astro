@@ -41,30 +41,42 @@ const {
       <slot />
     </main>
     <Footer />
-    <div class="custom-cursor" aria-hidden="true">
+    <div class="custom-cursor" aria-hidden="true" transition:persist>
       <span class="custom-cursor__ring"></span>
       <span class="custom-cursor__dot"></span>
       <span class="custom-cursor__label"></span>
     </div>
 
+    <script is:inline>
+      (function() {
+        var revealObserver = null;
+
+        function initRevealObserver() {
+          if (revealObserver) revealObserver.disconnect();
+          revealObserver = new IntersectionObserver(
+            function(entries) {
+              entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add("visible");
+                  revealObserver.unobserve(entry.target);
+                }
+              });
+            },
+            { threshold: 0.08, rootMargin: "0px 0px 80px 0px" }
+          );
+          document.querySelectorAll(".reveal:not(.visible)").forEach(function(el) { revealObserver.observe(el); });
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", initRevealObserver);
+        } else {
+          initRevealObserver();
+        }
+        document.addEventListener("astro:page-load", initRevealObserver);
+      })();
+    </script>
+
     <script>
-      function initRevealObserver() {
-        const observer = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (entry.isIntersecting) {
-                entry.target.classList.add("visible");
-              }
-            });
-          },
-          { threshold: 0.1 },
-        );
-        document.querySelectorAll(".reveal:not(.visible)").forEach((el) => observer.observe(el));
-      }
-
-      initRevealObserver();
-      document.addEventListener("astro:page-load", initRevealObserver);
-
       (() => {
         const canUseCustomCursor =
           window.matchMedia("(pointer: fine)").matches &&
@@ -89,6 +101,10 @@ const {
 
         document.body.classList.add("custom-cursor-enabled");
 
+        document.addEventListener("astro:after-swap", () => {
+          document.body.classList.add("custom-cursor-enabled");
+        });
+
         let mouseX = window.innerWidth / 2;
         let mouseY = window.innerHeight / 2;
         let ringX = mouseX;
@@ -96,7 +112,7 @@ const {
 
         const updatePointerTarget = (target: EventTarget | null) => {
           if (!(target instanceof Element)) {
-            cursor.classList.remove("is-active");
+            cursor.classList.remove("is-active", "is-interactive");
             label.textContent = "";
             return;
           }
@@ -106,11 +122,19 @@ const {
 
           if (interactive && cursorLabel) {
             cursor.classList.add("is-active");
+            cursor.classList.remove("is-interactive");
             label.textContent = cursorLabel;
             return;
           }
 
-          cursor.classList.remove("is-active");
+          if (interactive) {
+            cursor.classList.add("is-interactive");
+            cursor.classList.remove("is-active");
+            label.textContent = "";
+            return;
+          }
+
+          cursor.classList.remove("is-active", "is-interactive");
           label.textContent = "";
         };
 
