@@ -53,6 +53,18 @@ const links = [
   aria-hidden="true"
 >
   <div class="mobile-menu__inner">
+    <div class="mobile-menu__top">
+      <span class="mobile-menu__eyebrow">Navigation</span>
+      <button
+        id="mobile-menu-close"
+        type="button"
+        class="mobile-menu__close"
+        aria-label="Close menu"
+      >
+        <span class="mobile-menu__close-text">Close</span>
+        <span class="mobile-menu__close-x" aria-hidden="true">&times;</span>
+      </button>
+    </div>
     <nav class="mobile-menu__nav">
       {
         links.map((link, i) => (
@@ -83,7 +95,10 @@ const links = [
 
     const btn = toggle;
     const panel = menu;
+    if (btn.dataset.menuBound === '1') return;
+    btn.dataset.menuBound = '1';
     const burger = btn.querySelector('.mobile-burger');
+    const closeButton = panel.querySelector('#mobile-menu-close');
 
     function openMenu() {
       panel.classList.add('is-open');
@@ -111,6 +126,11 @@ const links = [
 
     panel.querySelectorAll('.mobile-menu__link').forEach((link) => {
       link.addEventListener('click', () => closeMenu());
+    });
+
+    closeButton?.addEventListener('click', () => {
+      closeMenu();
+      btn.focus();
     });
 
     document.addEventListener('keydown', (e) => {
