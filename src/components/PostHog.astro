@@ -1,0 +1,83 @@
+---
+const posthogKey = import.meta.env.PUBLIC_POSTHOG_KEY;
+const posthogHost = import.meta.env.PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
+---
+
+<script
+  is:inline
+  define:vars={{
+    posthogKey,
+    posthogHost,
+  }}
+>
+  if (
+    !window.__posthog_initialized &&
+    typeof posthogKey === "string" &&
+    posthogKey.length > 0
+  ) {
+    window.__posthog_initialized = true;
+    !(function (t, e) {
+      var o, n, p, r;
+      if (!e.__SV) {
+        window.posthog = e;
+        e._i = [];
+        e.init = function (i, s, a) {
+          function g(t2, e2) {
+            var o2 = e2.split(".");
+            if (o2.length === 2) {
+              t2 = t2[o2[0]];
+              e2 = o2[1];
+            }
+            t2[e2] = function () {
+              t2.push([e2].concat(Array.prototype.slice.call(arguments, 0)));
+            };
+          }
+          p = t.createElement("script");
+          p.type = "text/javascript";
+          p.crossOrigin = "anonymous";
+          p.async = true;
+          p.src = s.api_host + "/static/array.js";
+          r = t.getElementsByTagName("script")[0];
+          r.parentNode.insertBefore(p, r);
+          var u = e;
+          if (a !== undefined) {
+            u = e[a] = [];
+          } else {
+            a = "posthog";
+          }
+          u.people = u.people || [];
+          u.toString = function (t2) {
+            var e2 = "posthog";
+            if (a !== "posthog") {
+              e2 += "." + a;
+            }
+            if (!t2) {
+              e2 += " (stub)";
+            }
+            return e2;
+          };
+          u.people.toString = function () {
+            return u.toString(1) + ".people (stub)";
+          };
+          o =
+            "capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys getNextSurveyStep onSessionId".split(
+              " ",
+            );
+          for (n = 0; n < o.length; n++) {
+            g(u, o[n]);
+          }
+          e._i.push([i, s, a]);
+        };
+        e.__SV = 1;
+      }
+    })(document, window.posthog || []);
+
+    window.posthog.init(posthogKey, {
+      api_host: posthogHost,
+      defaults: "2026-01-30",
+      capture_pageview: "history_change",
+      capture_pageleave: true,
+      autocapture: false,
+    });
+  }
+</script>

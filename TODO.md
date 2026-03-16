@@ -45,9 +45,9 @@
 
 ## Deployment
 
-- [ ] Choose hosting (Vercel / Netlify / Cloudflare Pages)
-- [ ] Set up CI/CD pipeline (auto-deploy on push to main)
-- [ ] Connect custom domain
+- [x] Choose hosting (Vercel / Netlify / Cloudflare Pages)
+- [x] Set up CI/CD pipeline (auto-deploy on push to main)
+- [x] Connect custom domain
 - [ ] Set up analytics (Plausible, Fathom, or similar privacy-friendly option)
 
 ## Nice-to-Have / Stretch
@@ -58,3 +58,8 @@
 - [ ] Integrate a reading list or bookmarks section
 - [ ] Add code syntax highlighting theme for blog posts (match site palette)
 - [ ] Easter egg or hidden interaction somewhere on the site
+
+## Miscellaneous
+- [ ] improve SEO
+- [ ] add sitemap
+- [x] integrate posthog

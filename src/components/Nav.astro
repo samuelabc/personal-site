@@ -22,6 +22,9 @@ const links = [
         <a
           href={link.href}
           data-cursor-label="Jump"
+          data-track-event="nav-click"
+          data-nav-label={link.label}
+          data-nav-device="desktop"
           class="font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted px-3 py-1.5 border border-transparent transition-[color,border-color] duration-250 ease-smooth hover:text-ink hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {link.label}
@@ -70,6 +73,9 @@ const links = [
         links.map((link, i) => (
           <a
             href={link.href}
+            data-track-event="nav-click"
+            data-nav-label={link.label}
+            data-nav-device="mobile"
             class="mobile-menu__link"
             style={`--link-index: ${i}`}
           >
@@ -88,6 +94,28 @@ const links = [
 </div>
 
 <script>
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
+
+  function initNavTracking() {
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="nav-click"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const label = link.dataset.navLabel;
+          const device = link.dataset.navDevice;
+          if (!label || !device) return;
+
+          capturePostHogEvent(POSTHOG_EVENTS.NAV_CLICK, {
+            label,
+            device,
+          });
+        });
+      });
+  }
+
   function initMobileMenu() {
     const toggle = document.getElementById('mobile-menu-toggle');
     const menu = document.getElementById('mobile-menu');
@@ -141,6 +169,8 @@ const links = [
     });
   }
 
+  initNavTracking();
   initMobileMenu();
+  document.addEventListener('astro:page-load', initNavTracking);
   document.addEventListener('astro:page-load', initMobileMenu);
 </script>

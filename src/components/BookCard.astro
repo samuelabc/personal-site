@@ -18,6 +18,7 @@ const { title, slug, author, cover, year, color = "#6b3a3a" } = Astro.props;
   tabindex="0"
   data-cursor-label="Read notes"
   data-book-slug={slug}
+  data-book-title={title}
   transition:name={`book-${slug}`}
 >
   <div class="book-card__spine" aria-hidden="true"></div>
@@ -57,6 +58,7 @@ const { title, slug, author, cover, year, color = "#6b3a3a" } = Astro.props;
 
 <script>
   import { navigate } from "astro:transitions/client";
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
 
   function initBookCards() {
     document
@@ -67,7 +69,13 @@ const { title, slug, author, cover, year, color = "#6b3a3a" } = Astro.props;
 
         card.addEventListener("click", () => {
           const slug = card.dataset.bookSlug;
+          const title = card.dataset.bookTitle;
           if (!slug) return;
+          if (title) {
+            capturePostHogEvent(POSTHOG_EVENTS.BOOK_CLICK, {
+              book_title: title,
+            });
+          }
           navigate(`/bookshelf/${slug}`);
         });
 

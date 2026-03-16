@@ -24,6 +24,9 @@ const archived = projects.filter((p) => !p.featured);
                 target="_blank"
                 rel="noopener noreferrer"
                 data-cursor-label="Preview"
+                data-project-name={project.name}
+                data-link-type={project.demoUrl ? "demo" : "github"}
+                data-track-event="project-link"
                 class="block h-full"
               >
                 <img
@@ -41,6 +44,9 @@ const archived = projects.filter((p) => !p.featured);
                 target="_blank"
                 rel="noopener noreferrer"
                 data-cursor-label="Preview"
+                data-project-name={project.name}
+                data-link-type={project.demoUrl ? "demo" : "github"}
+                data-track-event="project-link"
                 class="flex items-center justify-center h-full min-h-[200px] md:min-h-0"
               >
                 <span class="font-display text-[clamp(5rem,12vw,9rem)] uppercase leading-none text-ink/[0.06] select-none transition-transform duration-500 ease-smooth group-hover:scale-110 group-hover:text-accent/[0.12]">
@@ -85,6 +91,9 @@ const archived = projects.filter((p) => !p.featured);
                   target="_blank"
                   rel="noopener noreferrer"
                   data-cursor-label="GitHub"
+                  data-project-name={project.name}
+                  data-link-type="github"
+                  data-track-event="project-link"
                   class="inline-flex items-center gap-2 px-3.5 py-2 border-2 border-ink font-mono text-[10px] uppercase tracking-[0.1em] text-ink bg-transparent transition-all duration-250 ease-smooth hover:bg-ink hover:text-bg hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
@@ -99,6 +108,9 @@ const archived = projects.filter((p) => !p.featured);
                   target="_blank"
                   rel="noopener noreferrer"
                   data-cursor-label="Visit Site"
+                  data-project-name={project.name}
+                  data-link-type="demo"
+                  data-track-event="project-link"
                   class="inline-flex items-center gap-2 px-3.5 py-2 border-2 border-ink bg-ink text-bg font-mono text-[10px] uppercase tracking-[0.1em] transition-all duration-250 ease-smooth hover:bg-accent hover:border-accent hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   Live
@@ -168,6 +180,9 @@ const archived = projects.filter((p) => !p.featured);
                     target="_blank"
                     rel="noopener noreferrer"
                     data-cursor-label="GitHub"
+                    data-project-name={project.name}
+                    data-link-type="github"
+                    data-track-event="project-link"
                     class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-soft hover:text-accent transition-colors duration-200"
                   >
                     <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
@@ -182,6 +197,9 @@ const archived = projects.filter((p) => !p.featured);
                     target="_blank"
                     rel="noopener noreferrer"
                     data-cursor-label="Demo"
+                    data-project-name={project.name}
+                    data-link-type="demo"
+                    data-track-event="project-link"
                     class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-soft hover:text-accent transition-colors duration-200"
                   >
                     Demo
@@ -200,6 +218,27 @@ const archived = projects.filter((p) => !p.featured);
 </section>
 
 <script>
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
+
+  function initProjectLinkTracking() {
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="project-link"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const projectName = link.dataset.projectName;
+          const linkType = link.dataset.linkType;
+          if (!projectName || !linkType) return;
+          capturePostHogEvent(POSTHOG_EVENTS.PROJECT_LINK_CLICK, {
+            project_name: projectName,
+            link_type: linkType,
+          });
+        });
+      });
+  }
+
   function initArchiveToggleLabel() {
     document.querySelectorAll<HTMLDetailsElement>(".archive-section").forEach((details) => {
       if (details.dataset.toggleBound) return;
@@ -210,10 +249,17 @@ const archived = projects.filter((p) => !p.featured);
 
       details.addEventListener("toggle", () => {
         summary.setAttribute("data-cursor-label", details.open ? "Collapse" : "Expand");
+        if (details.open) {
+          capturePostHogEvent(POSTHOG_EVENTS.ARCHIVE_EXPAND, {
+            section: "projects_archive",
+          });
+        }
       });
     });
   }
 
+  initProjectLinkTracking();
   initArchiveToggleLabel();
+  document.addEventListener("astro:page-load", initProjectLinkTracking);
   document.addEventListener("astro:page-load", initArchiveToggleLabel);
 </script>

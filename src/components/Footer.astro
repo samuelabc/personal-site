@@ -20,6 +20,7 @@ const socialLinks = [
         <a
           href={link.href}
           data-cursor-label="Jump"
+          data-footer-link-label={link.label}
           class="uppercase text-ink-muted no-underline transition-colors duration-200 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {link.label}
@@ -37,6 +38,9 @@ const socialLinks = [
             target="_blank"
             rel="noopener noreferrer"
             data-cursor-label="Open"
+            data-track-event="external-link"
+            data-external-url={link.href}
+            data-external-label={link.label}
             class="uppercase text-ink-muted no-underline transition-colors duration-200 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             {link.label}
@@ -47,3 +51,31 @@ const socialLinks = [
     <span>Built with Astro + curiosity</span>
   </div>
 </footer>
+
+<script>
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
+
+  function initFooterExternalTracking() {
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="external-link"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const url = link.dataset.externalUrl;
+          const label = link.dataset.externalLabel;
+          if (!url || !label) return;
+
+          capturePostHogEvent(POSTHOG_EVENTS.EXTERNAL_LINK_CLICK, {
+            url,
+            label,
+            location: "footer",
+          });
+        });
+      });
+  }
+
+  initFooterExternalTracking();
+  document.addEventListener("astro:page-load", initFooterExternalTracking);
+</script>
