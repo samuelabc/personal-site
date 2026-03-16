@@ -41,11 +41,6 @@ const {
       <slot />
     </main>
     <Footer />
-    <div class="custom-cursor" aria-hidden="true" transition:persist>
-      <span class="custom-cursor__ring"></span>
-      <span class="custom-cursor__dot"></span>
-      <span class="custom-cursor__label"></span>
-    </div>
 
     <script is:inline>
       (function() {
@@ -103,6 +98,10 @@ const {
 
         document.addEventListener("astro:after-swap", () => {
           document.body.classList.add("custom-cursor-enabled");
+          // Restore visibility: the DOM swap removes old elements (including
+          // whatever was under the cursor), firing mouseout on window and
+          // stripping is-visible before mouseover can re-add it.
+          cursor.classList.add("is-visible");
         });
 
         let mouseX = window.innerWidth / 2;

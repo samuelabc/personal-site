@@ -60,6 +60,9 @@ body {
   z-index: 120;
   opacity: 0;
   transition: opacity 220ms var(--ease-smooth);
+  /* Exclude from root view-transition screenshot so the live cursor is always
+     shown during navigation animations — no frozen-cursor ghost artifact. */
+  view-transition-name: none;
 }
 
 .custom-cursor.is-visible {
