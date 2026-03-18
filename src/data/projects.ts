@@ -15,7 +15,7 @@ export const projects: Project[] = [
     intro:
       "Champion of the Mercedes-Benz Malaysia AI Hackathon with an amazing team. We speedran building a talent ops platform with AI-powered candidate matching, intelligent interview question generation, a dedicated question bank, and interview scheduling. Easily one of the most fun builds I’ve worked on.",
     techStack: ["React", "TypeScript", "Golang", "LLM", "Vector Database"],
-    demoUrl: "https://yotalent.pages.dev/",
+    demoUrl: "https://yotalent.samuelthien.site/",
     screenshot: "/assets/projects/yotalent.png",
     year: "2025",
     featured: true,
@@ -37,7 +37,7 @@ export const projects: Project[] = [
     techStack: ["Rust", "wasm", "Astro", "Svelte", "Cloudflare Pages", "Tailwind"],
     githubUrl: "https://github.com/samuelabc/datetime-helper",
     demoUrl:
-      "https://datetime-helper.pages.dev/?o0=subtract%3A0%3Adays&s=now",
+      "https://datetime.samuelthien.site/?o0=subtract%3A0%3Adays&s=now",
     screenshot: "/assets/projects/datetime-helper.png",
     year: "2025",
     featured: true,
