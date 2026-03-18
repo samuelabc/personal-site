@@ -11,6 +11,16 @@ export interface Project {
 
 export const projects: Project[] = [
   {
+    "name": "AccessOps with Durable Execution",
+    intro:
+      "This started as a simple access management prototype, but I mainly built it to explore durable execution and workflow patterns. It's SvelteKit on the frontend and Go + Postgres on the backend, with DBOS workflows handling things like approvals, provisioning, and access reviews — so they keep running even if the system restarts or crashes. Mostly just a sandbox for me to understand how to build systems where long-running processes don't easily break, and where changes are still traceable when things go wrong.",
+    techStack: ["SvelteKit", "Go", "Postgres", "DBOS"],
+    demoUrl: "https://access-ops.samuelthien.site/",
+    screenshot: "/assets/projects/access-ops.png",
+    year: "2026",
+    featured: true,
+  },
+  {
     name: "YoTalent",
     intro:
       "Champion of the Mercedes-Benz Malaysia AI Hackathon with an amazing team. We speedran building a talent ops platform with AI-powered candidate matching, intelligent interview question generation, a dedicated question bank, and interview scheduling. Easily one of the most fun builds I’ve worked on.",
@@ -32,8 +42,7 @@ export const projects: Project[] = [
   },
   {
     name: "datetime-helper",
-    intro:
-      "Got tired of Googling Unix timestamp conversions while debugging, so I built my own toolkit — date math, timezone juggling, and path queries as a first-class citizen. It also turned into a fun tech exploration: Rust + WebAssembly under the hood, Astro for layout, and Svelte for the UI logic, with built-in skills for AI agents to query it directly.",
+    intro: "Got tired of Googling Unix timestamp conversions mid-debug, so I built my own toolkit — date math, timezone juggling, and path queries as a first-class feature. It also supports natural language queries. This turned into a fun tech exploration: Rust + WebAssembly under the hood, Astro for layout, and Svelte for UI logic — with built-in agent-friendly skills so AI systems can query it directly.",
     techStack: ["Rust", "wasm", "Astro", "Svelte", "Cloudflare Pages", "Tailwind"],
     githubUrl: "https://github.com/samuelabc/datetime-helper",
     demoUrl:
