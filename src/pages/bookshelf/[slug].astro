@@ -17,7 +17,12 @@ const { book } = Astro.props;
 const stars = "★".repeat(book.rating) + "☆".repeat(5 - book.rating);
 ---
 
-<Base title={`${book.title} — Bookshelf`}>
+<Base
+  title={`${book.title} — Samuel Thien`}
+  description={`${book.title} by ${book.author}`}
+  ogImage={`/og/bookshelf/${book.slug}.png`}
+  canonicalPath={`/bookshelf/${book.slug}`}
+>
   <section class="pt-8 sm:pt-14 pb-20">
     <a
       href="/bookshelf"
