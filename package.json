@@ -10,11 +10,17 @@
     "preview": "astro preview"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.2",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.2.1",
     "astro": "^6.0.2",
+    "satori": "^0.26.0",
     "tailwindcss": "^4.2.1"
   }
 }
