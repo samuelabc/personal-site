@@ -74,7 +74,3 @@ PostHog analytics is optional. The site runs fine without it.
 ## Deployment
 
 Builds to static HTML in `dist/`. No server, no runtime, no edge functions. Drop the files anywhere — Vercel, Netlify, S3, whatever serves HTML.
-
-## License
-
-MIT
