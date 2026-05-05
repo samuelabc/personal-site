@@ -20,7 +20,6 @@ fonts:
   weights: '300,400,500,600,700,800'
 defaults:
   transition: fade
-download: true
 exportFilename: durable-execution-talk
 ---
 

@@ -69,7 +69,7 @@ pnpm build:slides:pdf # export slides to PDF (local only, needs Chromium)
 
 Slides in `slides/` are built automatically during `pnpm build` and output to `public/talks/durable-execution/`. The built slides are gitignored.
 
-**PDF export is local-only.** Slidev uses Playwright to launch a headless Chromium browser for PDF generation. Cloudflare Pages (and most CI environments) don't have Chromium installed, so the CI build passes `--download false` to skip the PDF export step entirely. To generate a PDF locally, run `pnpm build:slides:pdf` — this requires `playwright-chromium` (listed as a devDependency in `slides/package.json`) and will prompt you to run `pnpm exec playwright install chromium` on first use.
+**PDF export is local-only.** Slidev uses Playwright to launch a headless Chromium browser for PDF generation. Cloudflare Pages (and most CI environments) don't have Chromium installed, so `download: true` is intentionally omitted from the slides frontmatter — setting it would make `slidev build` try to launch Playwright and fail in CI. To generate a PDF locally, run `pnpm build:slides:pdf` — this requires `playwright-chromium` (listed as a devDependency in `slides/package.json`) and will prompt you to run `pnpm exec playwright install chromium` on first use.
 
 ### Environment variables
 

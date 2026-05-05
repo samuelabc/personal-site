@@ -6,7 +6,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build:slides": "cd slides && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../public/talks/durable-execution --download false",
+    "build:slides": "cd slides && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../public/talks/durable-execution",
     "build:slides:pdf": "cd slides && pnpm exec slidev export --output ../public/talks/durable-execution/durable-execution-talk.pdf",
     "build": "pnpm build:slides && astro build",
     "preview": "astro preview"
