@@ -3,7 +3,6 @@ import { ClientRouter } from "astro:transitions";
 import "../styles/global.css";
 import Nav from "../components/Nav.astro";
 import Footer from "../components/Footer.astro";
-import MarqueeStrip from "../components/MarqueeStrip.astro";
 import PostHog from "../components/PostHog.astro";
 
 interface Props {
@@ -61,7 +60,7 @@ const jsonLd = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#f4f0e8" />
+    <meta name="theme-color" content="#f0eddf" />
     <meta name="robots" content="index, follow" />
     <title>{title}</title>
 
@@ -84,7 +83,7 @@ const jsonLd = {
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Vollkorn:ital,wght@0,700;0,900;1,700&display=swap"
       rel="stylesheet"
     />
 
@@ -96,7 +95,6 @@ const jsonLd = {
     <ClientRouter />
   </head>
   <body class="overflow-x-hidden">
-    <MarqueeStrip />
     <Nav />
     <main class="mx-auto max-w-[1100px] px-5 sm:px-10">
       <slot />
@@ -129,100 +127,6 @@ const jsonLd = {
           initRevealObserver();
         }
         document.addEventListener("astro:page-load", initRevealObserver);
-      })();
-    </script>
-
-    <script>
-      (() => {
-        const canUseCustomCursor =
-          window.matchMedia("(pointer: fine)").matches &&
-          !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-        if (!canUseCustomCursor) return;
-
-        const cursor = document.querySelector(".custom-cursor");
-        if (!(cursor instanceof HTMLElement)) return;
-
-        const ring = cursor.querySelector(".custom-cursor__ring");
-        const dot = cursor.querySelector(".custom-cursor__dot");
-        const label = cursor.querySelector(".custom-cursor__label");
-
-        if (
-          !(ring instanceof HTMLElement) ||
-          !(dot instanceof HTMLElement) ||
-          !(label instanceof HTMLElement)
-        ) {
-          return;
-        }
-
-        document.body.classList.add("custom-cursor-enabled");
-
-        document.addEventListener("astro:after-swap", () => {
-          document.body.classList.add("custom-cursor-enabled");
-          cursor.classList.add("is-visible");
-        });
-
-        let mouseX = window.innerWidth / 2;
-        let mouseY = window.innerHeight / 2;
-        let ringX = mouseX;
-        let ringY = mouseY;
-
-        const updatePointerTarget = (target: EventTarget | null) => {
-          if (!(target instanceof Element)) {
-            cursor.classList.remove("is-active", "is-interactive");
-            label.textContent = "";
-            return;
-          }
-
-          const interactive = target.closest("[data-cursor-label], a, button");
-          const cursorLabel = interactive?.getAttribute("data-cursor-label");
-
-          if (interactive && cursorLabel) {
-            cursor.classList.add("is-active");
-            cursor.classList.remove("is-interactive");
-            label.textContent = cursorLabel;
-            return;
-          }
-
-          if (interactive) {
-            cursor.classList.add("is-interactive");
-            cursor.classList.remove("is-active");
-            label.textContent = "";
-            return;
-          }
-
-          cursor.classList.remove("is-active", "is-interactive");
-          label.textContent = "";
-        };
-
-        window.addEventListener(
-          "mousemove",
-          (event) => {
-            mouseX = event.clientX;
-            mouseY = event.clientY;
-
-            dot.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
-            label.style.transform = `translate3d(${mouseX + 18}px, ${mouseY + 16}px, 0)`;
-            updatePointerTarget(event.target);
-          },
-          { passive: true },
-        );
-
-        const animateRing = () => {
-          ringX += (mouseX - ringX) * 0.2;
-          ringY += (mouseY - ringY) * 0.2;
-          ring.style.transform = `translate3d(${ringX}px, ${ringY}px, 0)`;
-          requestAnimationFrame(animateRing);
-        };
-        animateRing();
-
-        window.addEventListener("mouseout", () => {
-          cursor.classList.remove("is-visible");
-        });
-
-        window.addEventListener("mouseover", () => {
-          cursor.classList.add("is-visible");
-        });
       })();
     </script>
   </body>

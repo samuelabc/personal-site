@@ -1,69 +1,66 @@
-<section class="border-b-3 border-ink pt-12 sm:pt-20 pb-12 sm:pb-16 relative">
-  <div
-    class="hero-stagger hero-stagger-1 font-mono text-[13px] text-ink-muted mb-5 flex items-center gap-2.5"
+<section class="border-b border-rule pt-16 sm:pt-24 pb-16 sm:pb-20 relative">
+  <p
+    class="hero-stagger hero-stagger-1 font-ui text-sm text-ink-muted mb-6"
   >
-    <span class="inline-block origin-[70%_70%] hero-wave">👋</span>
-     Hey, I'm Samuel Thien
-  </div>
+    Hey, I'm Samuel Thien
+  </p>
 
   <h1
-    class="font-display text-[clamp(2.75rem,8vw,76px)] leading-[0.95] uppercase tracking-[-0.02em] mb-7"
+    class="font-display text-[clamp(2.25rem,6.5vw,4.5rem)] leading-[1.08] tracking-[-0.02em] font-bold mb-8"
   >
     <span class="hero-stagger hero-stagger-2 block">I build things</span>
-    <span class="hero-stagger hero-stagger-3 block"><span class="text-accent inline-block">that scale</span>, and</span>
-    <span class="hero-stagger hero-stagger-4 block">
-      <span
-        class="font-serif italic font-normal normal-case text-[clamp(3rem,8.5vw,80px)] tracking-[-0.01em]"
-        >stay secure</span
-      >
-    </span>
+    <span class="hero-stagger hero-stagger-3 block text-accent">with care.</span>
   </h1>
 
-  <div class="hero-stagger hero-stagger-5 flex flex-col sm:grid sm:grid-cols-2 gap-6 sm:gap-10 sm:items-end">
-    <p class="text-base leading-relaxed text-ink-soft max-w-[420px]">
-      Full stack engineer with a backend spine and a product eye. I build secure,
-      high-performance systems with Go, TypeScript, and React, then obsess over
-      the details that make them feel clear and alive.
+  <div class="hero-stagger hero-stagger-4 max-w-xl">
+    <p class="text-base sm:text-[17px] leading-relaxed text-ink-soft">
+      Full stack engineer in Kuala Lumpur. I work across backend systems and
+      product interfaces, mostly with Go, TypeScript, and React. Currently
+      building on the Cloud Security team at Mercedes-Benz.
     </p>
-    <div class="flex gap-6 sm:justify-end">
-      <div class="sm:text-right">
-        <div
-          class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted mb-1"
-        >
-          Building Since
-        </div>
-        <div class="font-display text-sm uppercase">2021</div>
-      </div>
-      <div class="sm:text-right">
-        <div
-          class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted mb-1"
-        >
-          Current Focus
-        </div>
-        <div class="font-display text-sm uppercase">Backend, Security, Product</div>
-      </div>
-    </div>
   </div>
 
-  <div class="hero-stagger hero-stagger-6 mt-8 sm:mt-10 flex flex-col sm:flex-row gap-3">
+  <div class="hero-stagger hero-stagger-5 mt-10 flex flex-wrap items-center gap-4">
     <a
       href="#projects"
-      data-cursor-label="View"
-      class="pressable pressable-strong group inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-ink text-bg font-mono text-xs uppercase tracking-[0.1em] border-3 border-ink transition-[background-color,border-color,transform] duration-300 ease-smooth hover:bg-accent hover:border-accent hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      class="pressable group inline-flex items-center gap-2.5 px-7 py-3.5 bg-accent text-white font-ui text-sm tracking-wide rounded-lg transition-[background-color,transform,box-shadow] duration-300 ease-smooth hover:shadow-[0_6px_20px_oklch(48%_0.10_150_/_0.25)] hover:-translate-y-0.5 no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
-      View Projects
+      See my work
       <span
         class="transition-transform duration-300 ease-smooth group-hover:translate-x-1"
-        >→</span
+        >&rarr;</span
       >
     </a>
     <a
       href="/samuel-thien-resume.pdf"
       target="_blank"
-      data-cursor-label="Open"
-      class="pressable pressable-soft inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-transparent text-ink font-mono text-xs uppercase tracking-[0.1em] border-3 border-ink transition-[background-color,color,transform] duration-300 ease-smooth hover:bg-ink hover:text-bg hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      rel="noopener noreferrer"
+      data-track-event="resume-download"
+      class="pressable group inline-flex items-center gap-2 px-7 py-3.5 border border-accent/30 text-accent font-ui text-sm tracking-wide rounded-lg transition-[background-color,color,border-color,transform,box-shadow] duration-300 ease-smooth hover:bg-accent/[0.06] hover:border-accent/50 hover:-translate-y-0.5 no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
-      Download Resume
+      Resume
+      <svg class="w-3.5 h-3.5 transition-transform duration-300 ease-smooth group-hover:translate-y-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-6-6 6 6 6-6" />
+      </svg>
     </a>
   </div>
 </section>
+
+<script>
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
+
+  function initResumeTracking() {
+    const link = document.querySelector<HTMLAnchorElement>('a[data-track-event="resume-download"]');
+    if (!link || link.dataset.analyticsBound === "1") return;
+    link.dataset.analyticsBound = "1";
+
+    link.addEventListener("click", () => {
+      capturePostHogEvent(POSTHOG_EVENTS.RESUME_CLICK, {
+        location: "hero",
+      });
+    });
+  }
+
+  initResumeTracking();
+  document.addEventListener("astro:page-load", initResumeTracking);
+</script>

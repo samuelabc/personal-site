@@ -6,24 +6,22 @@ const featured = projects.filter((p) => p.featured);
 const archived = projects.filter((p) => !p.featured);
 ---
 
-<section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="projects" data-reveal="scale-up">
+<section class="py-16 sm:py-20 border-b border-rule reveal" id="projects" data-reveal="scale-up">
   <SectionHeader num="02" title="Selected Work" tagline="Things I've shipped, and things I'm proud of." />
 
   <div class="space-y-5">
     {featured.map((project, idx) => (
       <article
         style={`--project-delay: ${90 + idx * 80}ms;`}
-        class="project-reveal project-card-glint group border-3 border-ink bg-bg-card relative overflow-hidden"
+        class="project-reveal project-card-hover group rounded-xl border border-rule bg-bg-card relative overflow-hidden"
       >
         <div class="flex flex-col md:flex-row">
-          {/* Screenshot / Typographic fallback */}
-          <div class="relative aspect-[16/10] md:aspect-auto md:w-[42%] shrink-0 border-b-3 md:border-b-0 md:border-r-3 border-ink bg-ink/[0.03] overflow-hidden">
+          <div class="relative aspect-[16/10] md:aspect-auto md:w-[42%] shrink-0 border-b md:border-b-0 md:border-r border-rule bg-ink/[0.02] overflow-hidden rounded-t-xl md:rounded-t-none md:rounded-l-xl">
             {project.screenshot ? (
               <a
                 href={project.demoUrl || project.githubUrl || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                data-cursor-label="Preview"
                 data-project-name={project.name}
                 data-link-type={project.demoUrl ? "demo" : "github"}
                 data-track-event="project-link"
@@ -35,7 +33,7 @@ const archived = projects.filter((p) => !p.featured);
                   width="800"
                   height="500"
                   loading={idx === 0 ? "eager" : "lazy"}
-                  class="w-full h-full object-contain transition-transform duration-500 ease-smooth group-hover:scale-[1.03]"
+                  class="w-full h-full object-contain transition-transform duration-600 ease-smooth group-hover:scale-[1.02]"
                 />
               </a>
             ) : (
@@ -43,29 +41,25 @@ const archived = projects.filter((p) => !p.featured);
                 href={project.demoUrl || project.githubUrl || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                data-cursor-label="Preview"
                 data-project-name={project.name}
                 data-link-type={project.demoUrl ? "demo" : "github"}
                 data-track-event="project-link"
                 class="flex items-center justify-center h-full min-h-[200px] md:min-h-0"
               >
-                <span class="font-display text-[clamp(5rem,12vw,9rem)] uppercase leading-none text-ink/[0.06] select-none transition-transform duration-500 ease-smooth group-hover:scale-110 group-hover:text-accent/[0.12]">
+                <span class="font-display text-[clamp(5rem,12vw,9rem)] font-bold leading-none text-ink/[0.04] select-none transition-transform duration-600 ease-smooth group-hover:scale-105 group-hover:text-accent/[0.08]">
                   {project.name.charAt(0)}
                 </span>
               </a>
             )}
           </div>
 
-          {/* Content */}
           <div class="flex-1 p-5 sm:p-7 flex flex-col justify-between">
             <div>
-              <div class="flex items-center gap-3 mb-4">
-                <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted">
-                  {project.year}
-                </span>
-              </div>
+              <span class="font-ui text-xs text-ink-muted mb-3 block">
+                {project.year}
+              </span>
 
-              <h3 class="font-display text-xl sm:text-2xl md:text-3xl uppercase tracking-[0.02em] mb-3 leading-tight">
+              <h3 class="font-display text-xl sm:text-2xl md:text-[1.75rem] font-bold tracking-[-0.01em] mb-3 leading-tight">
                 {project.name}
               </h3>
 
@@ -73,28 +67,25 @@ const archived = projects.filter((p) => !p.featured);
                 {project.intro}
               </p>
 
-              {/* Tech Stack */}
-              <div class="flex flex-wrap gap-1.5 mb-6">
+              <div class="flex flex-wrap gap-2 mb-6">
                 {project.techStack.map((tech) => (
-                  <span class="project-tag font-mono text-[10px] uppercase tracking-[0.08em] border border-ink/60 px-2 py-0.5 text-ink-soft">
+                  <span class="font-ui text-xs px-3 py-1 rounded-full bg-ink/[0.04] text-ink-muted">
                     {tech}
                   </span>
                 ))}
               </div>
             </div>
 
-            {/* Links */}
             <div class="flex flex-wrap items-center gap-2.5">
               {project.githubUrl && (
                 <a
                   href={project.githubUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  data-cursor-label="GitHub"
                   data-project-name={project.name}
                   data-link-type="github"
                   data-track-event="project-link"
-                  class="inline-flex items-center gap-2 px-3.5 py-2 border-2 border-ink font-mono text-[10px] uppercase tracking-[0.1em] text-ink bg-transparent transition-all duration-250 ease-smooth hover:bg-ink hover:text-bg hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  class="inline-flex items-center gap-2 px-4 py-2 border border-rule rounded-lg font-ui text-xs text-ink transition-all duration-250 ease-smooth hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
                     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
@@ -107,11 +98,10 @@ const archived = projects.filter((p) => !p.featured);
                   href={project.demoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  data-cursor-label="Visit Site"
                   data-project-name={project.name}
                   data-link-type="demo"
                   data-track-event="project-link"
-                  class="inline-flex items-center gap-2 px-3.5 py-2 border-2 border-ink bg-ink text-bg font-mono text-[10px] uppercase tracking-[0.1em] transition-all duration-250 ease-smooth hover:bg-accent hover:border-accent hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-ui text-xs transition-all duration-250 ease-smooth hover:shadow-[0_4px_16px_oklch(48%_0.10_150_/_0.25)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   Live
                   <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -126,19 +116,17 @@ const archived = projects.filter((p) => !p.featured);
     ))}
   </div>
 
-  {/* Archive */}
   {archived.length > 0 && (
     <details class="archive-section mt-10 group/archive">
       <summary
-        class="archive-trigger flex items-center gap-4 cursor-pointer select-none py-3.5 px-5 list-none [&::-webkit-details-marker]:hidden border-2 border-dashed border-ink/30 hover:border-ink/60 transition-all duration-300 ease-smooth"
-        data-cursor-label="Expand"
+        class="flex items-center gap-4 cursor-pointer select-none py-3.5 px-5 list-none [&::-webkit-details-marker]:hidden rounded-lg border border-dashed border-rule hover:border-ink/30 transition-all duration-300 ease-smooth"
       >
-        <span class="font-mono text-[12px] sm:text-[13px] uppercase tracking-[0.1em] text-ink/70 group-hover/archive:text-accent transition-colors duration-200 font-medium">
+        <span class="font-ui text-sm text-ink-muted group-hover/archive:text-accent transition-colors duration-250">
           +{archived.length} more from the archive
         </span>
         <span class="flex-1 h-px bg-rule"></span>
-        <span class="archive-chevron text-ink/50 group-hover/archive:text-accent transition-all duration-300 ease-smooth">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <span class="archive-chevron text-ink-muted group-hover/archive:text-accent transition-all duration-300 ease-smooth">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 6l4 4 4-4" />
           </svg>
         </span>
@@ -153,22 +141,22 @@ const archived = projects.filter((p) => !p.featured);
             ]}
           >
             <div class="sm:w-[220px] shrink-0">
-              <h4 class="font-display text-sm uppercase tracking-[0.02em] leading-tight">
+              <h4 class="font-display text-sm font-bold leading-tight">
                 {project.name}
               </h4>
-              <span class="font-mono text-[10px] text-ink-muted tracking-[0.08em] mt-1 block">
+              <span class="font-ui text-xs text-ink-muted mt-1 block">
                 {project.year}
               </span>
             </div>
 
-            <p class="text-[14px] text-ink-soft leading-[1.7] flex-1 min-w-0">
+            <p class="text-sm text-ink-soft leading-[1.7] flex-1 min-w-0">
               {project.intro}
             </p>
 
             <div class="flex flex-col gap-1.5 sm:shrink-0 sm:items-end">
-              <div class="flex flex-wrap gap-1 sm:justify-end">
+              <div class="flex flex-wrap gap-1.5 sm:justify-end">
                 {project.techStack.map((tech) => (
-                  <span class="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted border border-ink/40 px-1.5 py-0.5">
+                  <span class="font-ui text-[11px] text-ink-muted bg-ink/[0.03] rounded-full px-2 py-0.5">
                     {tech}
                   </span>
                 ))}
@@ -179,11 +167,10 @@ const archived = projects.filter((p) => !p.featured);
                     href={project.githubUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    data-cursor-label="GitHub"
                     data-project-name={project.name}
                     data-link-type="github"
                     data-track-event="project-link"
-                    class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-soft hover:text-accent transition-colors duration-200"
+                    class="inline-flex items-center gap-1.5 font-ui text-xs text-ink-soft hover:text-accent transition-colors duration-250"
                   >
                     <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
                       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
@@ -196,11 +183,10 @@ const archived = projects.filter((p) => !p.featured);
                     href={project.demoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    data-cursor-label="Demo"
                     data-project-name={project.name}
                     data-link-type="demo"
                     data-track-event="project-link"
-                    class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-soft hover:text-accent transition-colors duration-200"
+                    class="inline-flex items-center gap-1.5 font-ui text-xs text-ink-soft hover:text-accent transition-colors duration-250"
                   >
                     Demo
                     <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -244,11 +230,7 @@ const archived = projects.filter((p) => !p.featured);
       if (details.dataset.toggleBound) return;
       details.dataset.toggleBound = "1";
 
-      const summary = details.querySelector("summary");
-      if (!summary) return;
-
       details.addEventListener("toggle", () => {
-        summary.setAttribute("data-cursor-label", details.open ? "Collapse" : "Expand");
         if (details.open) {
           capturePostHogEvent(POSTHOG_EVENTS.ARCHIVE_EXPAND, {
             section: "projects_archive",

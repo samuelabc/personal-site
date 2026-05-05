@@ -13,15 +13,14 @@ const socialLinks = [
 ];
 ---
 
-<footer class="border-t-3 border-ink px-5 sm:px-10 py-6 font-mono text-[11px] text-ink-muted tracking-[0.05em]">
+<footer class="border-t border-rule px-5 sm:px-10 py-6 font-ui text-xs text-ink-muted">
   <div class="flex flex-wrap justify-center gap-x-5 gap-y-1 mb-4">
     {
       siteLinks.map((link) => (
         <a
           href={link.href}
-          data-cursor-label="Jump"
           data-footer-link-label={link.label}
-          class="uppercase text-ink-muted no-underline transition-colors duration-200 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          class="text-ink-muted no-underline transition-colors duration-250 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {link.label}
         </a>
@@ -37,11 +36,10 @@ const socialLinks = [
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
-            data-cursor-label="Open"
             data-track-event="external-link"
             data-external-url={link.href}
             data-external-label={link.label}
-            class="uppercase text-ink-muted no-underline transition-colors duration-200 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            class="text-ink-muted no-underline transition-colors duration-250 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             {link.label}
           </a>

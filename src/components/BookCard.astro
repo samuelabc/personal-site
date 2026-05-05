@@ -16,12 +16,10 @@ const { title, slug, author, cover, year, color = "#6b3a3a" } = Astro.props;
 <div
   class="book-card"
   tabindex="0"
-  data-cursor-label="Read notes"
   data-book-slug={slug}
   data-book-title={title}
   transition:name={`book-${slug}`}
 >
-  <div class="book-card__spine" aria-hidden="true"></div>
   {
     cover ? (
       <img
@@ -35,15 +33,15 @@ const { title, slug, author, cover, year, color = "#6b3a3a" } = Astro.props;
         class="book-card__cover book-card__cover--typo"
         style={`background-color:${color}`}
       >
-        <div class="absolute inset-[5px] border-2 border-white/10 pointer-events-none" />
+        <div class="absolute inset-[5px] border border-white/10 rounded-md pointer-events-none" />
         <div class="relative z-10">
-          <div class="font-serif text-white/90 text-sm sm:text-base leading-snug italic">
+          <div class="font-display text-white/90 text-sm sm:text-base leading-snug italic font-bold">
             {title}
           </div>
         </div>
         <div class="relative z-10">
-          <div class="w-8 h-[2px] bg-white/25 mb-2" />
-          <div class="font-mono text-[8px] sm:text-[9px] text-white/55 uppercase tracking-[0.14em]">
+          <div class="w-8 h-[1.5px] bg-white/20 mb-2 rounded-full" />
+          <div class="font-ui text-[8px] sm:text-[9px] text-white/55 uppercase tracking-[0.08em]">
             {author}
           </div>
         </div>

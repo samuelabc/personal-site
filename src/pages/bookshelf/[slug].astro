@@ -14,7 +14,7 @@ interface Props {
 }
 
 const { book } = Astro.props;
-const stars = "★".repeat(book.rating) + "☆".repeat(5 - book.rating);
+const stars = "\u2605".repeat(book.rating) + "\u2606".repeat(5 - book.rating);
 ---
 
 <Base
@@ -23,11 +23,10 @@ const stars = "★".repeat(book.rating) + "☆".repeat(5 - book.rating);
   ogImage={`/og/bookshelf/${book.slug}.png`}
   canonicalPath={`/bookshelf/${book.slug}`}
 >
-  <section class="pt-8 sm:pt-14 pb-20">
+  <section class="pt-10 sm:pt-16 pb-20">
     <a
       href="/bookshelf"
-      data-cursor-label="Back"
-      class="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted mb-10 sm:mb-14 transition-colors duration-200 hover:text-accent"
+      class="inline-flex items-center gap-2 font-ui text-sm text-ink-muted mb-10 sm:mb-14 transition-colors duration-250 hover:text-accent"
     >
       <span aria-hidden="true">&larr;</span> Bookshelf
     </a>
@@ -42,31 +41,31 @@ const stars = "★".repeat(book.rating) + "☆".repeat(5 - book.rating);
             <img
               src={book.cover}
               alt={`Cover of ${book.title}`}
-              class="w-full border-3 border-ink shadow-[6px_6px_0_rgba(0,0,0,0.1)]"
+              class="w-full rounded-lg border border-rule shadow-[0_4px_20px_oklch(0%_0_0_/_0.08)]"
             />
           </div>
         )}
 
         <div class="flex flex-col justify-center">
-          <h1 class="font-display text-3xl sm:text-4xl lg:text-5xl uppercase tracking-[0.03em] leading-[0.92] mb-4 sm:mb-5">
+          <h1 class="font-display text-3xl sm:text-4xl lg:text-5xl font-bold tracking-[-0.01em] leading-[0.95] mb-4 sm:mb-5">
             {book.title}
           </h1>
-          <div class="font-mono text-[11px] sm:text-xs text-ink-muted uppercase tracking-[0.12em] mb-3">
-            {book.author}&ensp;&middot;&ensp;Read in {book.year}
+          <div class="font-ui text-sm text-ink-muted mb-3">
+            {book.author} &middot; Read in {book.year}
           </div>
-          <div class="font-serif text-accent text-xl sm:text-2xl tracking-wide select-none" aria-label={`Rated ${book.rating} out of 5`}>
+          <div class="text-accent text-xl sm:text-2xl tracking-wide select-none" aria-label={`Rated ${book.rating} out of 5`}>
             {stars}
           </div>
         </div>
       </div>
     </div>
 
-    <div class="border-t border-ink/20 mt-8 sm:mt-10 pt-6 sm:pt-8">
-      <div class="font-mono text-[10px] text-ink-muted uppercase tracking-[0.14em] mb-6 sm:mb-8">
+    <div class="border-t border-rule mt-10 sm:mt-12 pt-8 sm:pt-10">
+      <div class="font-ui text-xs text-ink-muted uppercase tracking-[0.06em] mb-6 sm:mb-8">
         Notes
       </div>
       <div class="max-w-2xl">
-        <p class="font-serif text-lg sm:text-xl italic text-ink-soft leading-relaxed">
+        <p class="text-lg sm:text-xl italic text-ink-soft leading-relaxed">
           {book.note}
         </p>
       </div>

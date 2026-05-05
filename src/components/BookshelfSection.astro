@@ -22,7 +22,7 @@ interface Props {
 const { num, title, books } = Astro.props;
 ---
 
-<section class="py-8 sm:py-12">
+<section class="py-10 sm:py-14">
   <SectionHeader num={num} title={title} />
 
   <div class="bookshelf-grid">
@@ -34,4 +34,6 @@ const { num, title, books } = Astro.props;
       ))
     }
   </div>
+
+  <div class="shelf-edge" aria-hidden="true"></div>
 </section>

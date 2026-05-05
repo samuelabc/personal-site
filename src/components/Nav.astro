@@ -9,23 +9,21 @@ const links = [
 ---
 
 <nav
-  class="sticky top-0 z-50 flex items-center justify-between border-b-3 border-ink bg-bg px-4 sm:px-10 py-3 sm:py-4 gap-2"
+  class="sticky top-0 z-50 flex items-center justify-between border-b border-rule bg-bg/95 backdrop-blur-sm px-4 sm:px-10 py-3 sm:py-4 gap-2"
 >
-  <a href="/" data-cursor-label="Home" class="font-display text-sm sm:text-lg uppercase tracking-[0.05em] no-underline text-inherit shrink-0">
+  <a href="/" class="font-display text-base sm:text-lg font-bold tracking-[-0.01em] no-underline text-inherit shrink-0">
     Samuel Thien
   </a>
 
-  {/* Desktop nav links */}
-  <div class="hidden sm:flex gap-2">
+  <div class="hidden sm:flex gap-1">
     {
       links.map((link) => (
         <a
           href={link.href}
-          data-cursor-label="Jump"
           data-track-event="nav-click"
           data-nav-label={link.label}
           data-nav-device="desktop"
-          class="font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted px-3 py-1.5 border border-transparent transition-[color,border-color] duration-250 ease-smooth hover:text-ink hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          class="font-ui text-[13px] text-ink-muted px-3 py-1.5 rounded-md transition-colors duration-250 ease-smooth hover:text-ink hover:bg-ink/[0.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {link.label}
         </a>
@@ -33,7 +31,6 @@ const links = [
     }
   </div>
 
-  {/* Mobile hamburger button */}
   <button
     id="mobile-menu-toggle"
     class="sm:hidden relative z-[70] w-10 h-10 flex items-center justify-center"
@@ -49,7 +46,6 @@ const links = [
   </button>
 </nav>
 
-{/* Mobile full-screen menu */}
 <div
   id="mobile-menu"
   class="mobile-menu"
@@ -86,7 +82,7 @@ const links = [
       }
     </nav>
     <div class="mobile-menu__footer">
-      <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted">
+      <span class="font-ui text-xs text-ink-muted">
         Full Stack Engineer &middot; KL, Malaysia
       </span>
     </div>

@@ -17,43 +17,39 @@ const skills = [
 ];
 ---
 
-<section class="py-12 sm:py-16 border-b-3 border-ink reveal" id="about" data-reveal="slide-left">
+<section class="py-16 sm:py-20 border-b border-rule reveal" id="about" data-reveal="slide-left">
   <SectionHeader num="01" title="About" />
 
-  <div class="grid grid-cols-1 sm:grid-cols-[280px_1fr] gap-8 sm:gap-12 items-start">
-    <div class="aspect-square border-3 border-ink relative overflow-hidden max-w-[280px]">
+  <div class="grid grid-cols-1 sm:grid-cols-[260px_1fr] gap-8 sm:gap-12 items-start">
+    <div class="aspect-square rounded-xl overflow-hidden max-w-[260px] shadow-[0_4px_20px_oklch(0%_0_0_/_0.06)]">
       <img
         src="/samuel-thien-photo.png"
         alt="Samuel Thien"
         loading="lazy"
-        class="absolute inset-0 block w-full h-full object-cover object-center scale-[1.08]"
+        class="block w-full h-full object-cover object-center scale-[1.08]"
       />
-      <span
-        class="absolute bottom-[-1px] right-[-1px] bg-accent text-white font-mono text-[10px] px-2.5 py-1.5 uppercase tracking-[0.1em] z-10"
-        >That's me →</span
-      >
     </div>
 
     <div>
-      <h3 class="font-serif text-3xl sm:text-4xl font-normal italic mb-4 leading-tight">
-        The short version —
+      <h3 class="font-display text-2xl sm:text-3xl font-bold italic mb-4 leading-tight text-ink">
+        The short version
       </h3>
-      <p class="text-[15px] leading-[1.75] text-ink-soft mb-4">
+      <p class="text-[15px] sm:text-base leading-[1.75] text-ink-soft mb-4">
         Full stack engineer in Kuala Lumpur, 4+ years into building web and
         mobile platforms. I work mostly in Golang, Node.js, and React, touching
         everything from high-performance microservices to polished, pixel-level
         frontends. Currently on the Cloud Security team at Mercedes-Benz.
       </p>
-      <p class="text-[15px] leading-[1.75] text-ink-soft">
+      <p class="text-[15px] sm:text-base leading-[1.75] text-ink-soft">
         Studied Computer Science at Beihang University in Beijing, graduated
         with honors, and published research on adversarial machine learning
         along the way. I speak English, Chinese, and Malay.
       </p>
 
-      <div class="flex flex-wrap gap-1.5 mt-5">
+      <div class="flex flex-wrap gap-2 mt-6">
         {
           skills.map((skill) => (
-            <span class="font-mono text-[10px] uppercase tracking-[0.08em] px-2.5 py-1 border border-rule text-ink-muted">
+            <span class="font-ui text-xs px-3 py-1 rounded-full bg-accent/[0.07] text-accent">
               {skill}
             </span>
           ))

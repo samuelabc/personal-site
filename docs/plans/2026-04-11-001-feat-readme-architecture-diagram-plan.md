@@ -1,9 +1,9 @@
 ---
-title: "feat: Create README with architecture diagram"
+
+## title: "feat: Create README with architecture diagram"
 type: feat
 status: completed
 date: 2026-04-11
----
 
 # feat: Create README with architecture diagram
 
@@ -82,7 +82,7 @@ Static Output → CDN
 
 ## Implementation Units
 
-- [ ] **Unit 1: Create and export architecture diagram**
+- **Unit 1: Create and export architecture diagram**
 
 **Goal:** Produce a PNG architecture diagram of the site using Excalidraw MCP
 
@@ -91,24 +91,27 @@ Static Output → CDN
 **Dependencies:** None
 
 **Files:**
+
 - Create: `docs/architecture.png`
 
 **Approach:**
+
 - Call Excalidraw MCP `create_view` with elements representing the site architecture: Astro build pipeline, page routing, component composition, data layer, OG image pipeline, and static output
 - Capture the rendered diagram as a PNG and save to `docs/architecture.png`
 - Diagram should show: Pages → Layout → Components → Data flow, plus the OG generation pipeline as a parallel branch, and the final static output to CDN
 
 **Patterns to follow:**
+
 - Excalidraw element format from the MCP `read_me` reference
 - Use labeled shapes, zone backgrounds, and clear arrow bindings
 
 **Test expectation:** none — visual asset, no behavioral change
 
 **Verification:**
+
 - `docs/architecture.png` exists and is a readable image
 - Diagram accurately reflects the project structure
-
-- [ ] **Unit 2: Write README.md**
+- **Unit 2: Write README.md**
 
 **Goal:** Create a comprehensive, personality-forward README
 
@@ -117,9 +120,11 @@ Static Output → CDN
 **Dependencies:** Unit 1 (diagram image must exist for embedding)
 
 **Files:**
+
 - Create: `README.md`
 
 **Approach:**
+
 - Sections: project title/tagline, screenshot or hero description, tech stack badges, architecture diagram (embedded from `docs/architecture.png`), project structure tree, getting started (prerequisites, install, dev, build), deployment notes, license
 - Tone: confident and direct, matching brand personality. No corporate boilerplate
 - Use the existing `package.json` scripts (`dev`, `build`, `preview`) for the getting started section
@@ -127,12 +132,14 @@ Static Output → CDN
 - Keep the project structure tree focused — show `src/` depth but not every file
 
 **Patterns to follow:**
+
 - Match the editorial tone established in AGENTS.md brand personality
 - Use standard GitHub markdown features (badges, code blocks, image embeds)
 
 **Test expectation:** none — documentation file, no behavioral change
 
 **Verification:**
+
 - `README.md` exists at repo root
 - Architecture diagram renders correctly in GitHub markdown preview
 - All referenced paths and commands are accurate
@@ -148,13 +155,16 @@ Static Output → CDN
 
 ## Risks & Dependencies
 
-| Risk | Mitigation |
-|------|------------|
+
+| Risk                                                                   | Mitigation                                                                                                       |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Excalidraw MCP screenshot capture may require browser MCP coordination | Fall back to exporting to excalidraw.com and using the shareable link, or use GenerateImage for a static diagram |
-| Architecture diagram may become stale as the project evolves | Keep the diagram high-level enough that minor changes don't invalidate it |
+| Architecture diagram may become stale as the project evolves           | Keep the diagram high-level enough that minor changes don't invalidate it                                        |
+
 
 ## Sources & References
 
 - Related code: `package.json`, `astro.config.mjs`, `src/pages/`, `src/components/`, `src/data/`
 - Design context: `AGENTS.md` (brand personality, aesthetic direction)
 - Excalidraw MCP: `create_view`, `export_to_excalidraw` tools
+
