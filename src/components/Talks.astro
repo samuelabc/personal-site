@@ -37,13 +37,14 @@ import { talks } from "../data/talks";
             rel="noopener noreferrer"
             data-talk-slug={talk.slug}
             data-track-event="talk-pdf-download"
-            class="relative z-10 text-ink-muted hover:text-accent transition-colors duration-250"
+            class="relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 border border-rule rounded-lg font-ui text-xs text-ink-muted transition-all duration-250 ease-smooth hover:border-accent hover:text-accent"
             aria-label={`Download PDF for ${talk.title}`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 5v14m-6-6 6 6 6-6" />
               <path d="M4 19h16" />
             </svg>
+            <span class="hidden sm:inline">PDF</span>
           </a>
           <span class="text-lg text-ink-muted transition-[transform,color] duration-300 ease-smooth group-hover:translate-x-1.5 group-hover:text-accent">
             &rarr;
