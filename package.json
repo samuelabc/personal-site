@@ -6,7 +6,8 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build:slides": "cd slides && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../public/talks/durable-execution",
+    "build": "pnpm build:slides && astro build",
     "preview": "astro preview"
   },
   "pnpm": {

@@ -1,0 +1,107 @@
+---
+import SectionHeader from "./SectionHeader.astro";
+import { talks } from "../data/talks";
+---
+
+<section class="py-16 sm:py-20 border-b border-rule reveal" id="talks" data-reveal="scale-up">
+  <SectionHeader num="03" title="Talks" tagline="Sharing what I've been learning, one slide deck at a time." />
+
+  <div class="flex flex-col gap-1.5">
+    {talks.map((talk) => (
+      <div
+        class="group relative flex justify-between items-center rounded-xl border border-rule px-5 sm:px-7 py-5 bg-bg-card transition-all duration-400 ease-smooth hover:shadow-[0_4px_20px_oklch(0%_0_0_/_0.05)] hover:border-accent/30"
+      >
+        <div class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 min-w-0">
+          <span class="font-ui text-xs text-ink-muted sm:min-w-[72px] shrink-0">
+            {talk.date}
+          </span>
+          <div class="min-w-0">
+            <a
+              href={talk.slidesPath}
+              data-talk-slug={talk.slug}
+              data-track-event="talk-click"
+              data-astro-reload
+              class="font-display text-base sm:text-lg font-bold italic block leading-snug no-underline text-inherit after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {talk.title}
+            </a>
+            <span class="text-sm text-ink-soft mt-1.5 block leading-relaxed line-clamp-2">
+              {talk.description}
+            </span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 shrink-0 ml-4">
+          <a
+            href={`${talk.slidesPath}${talk.pdfFilename}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-talk-slug={talk.slug}
+            data-track-event="talk-pdf-download"
+            class="relative z-10 text-ink-muted hover:text-accent transition-colors duration-250"
+            aria-label={`Download PDF for ${talk.title}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14m-6-6 6 6 6-6" />
+              <path d="M4 19h16" />
+            </svg>
+          </a>
+          <span class="text-lg text-ink-muted transition-[transform,color] duration-300 ease-smooth group-hover:translate-x-1.5 group-hover:text-accent">
+            &rarr;
+          </span>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  {talks.length > 1 && (
+    <div class="mt-6 text-center">
+      <a
+        href="/talks"
+        class="font-ui text-sm text-ink-muted hover:text-accent transition-colors duration-250"
+      >
+        See all talks &rarr;
+      </a>
+    </div>
+  )}
+</section>
+
+<script>
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
+
+  function initTalkTracking() {
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="talk-click"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const slug = link.dataset.talkSlug;
+          if (!slug) return;
+          capturePostHogEvent(POSTHOG_EVENTS.TALK_CLICK, {
+            talk_slug: slug,
+            location: "homepage",
+          });
+        });
+      });
+
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="talk-pdf-download"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const slug = link.dataset.talkSlug;
+          if (!slug) return;
+          capturePostHogEvent(POSTHOG_EVENTS.TALK_PDF_DOWNLOAD, {
+            talk_slug: slug,
+            location: "homepage",
+          });
+        });
+      });
+  }
+
+  initTalkTracking();
+  document.addEventListener("astro:page-load", initTalkTracking);
+</script>

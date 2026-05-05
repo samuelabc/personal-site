@@ -6,6 +6,8 @@ export const POSTHOG_EVENTS = {
   BOOK_CLICK: "book_click",
   EXTERNAL_LINK_CLICK: "external_link_click",
   RESUME_CLICK: "resume_click",
+  TALK_CLICK: "talk_click",
+  TALK_PDF_DOWNLOAD: "talk_pdf_download",
 } as const;
 
 type PostHogEventName = (typeof POSTHOG_EVENTS)[keyof typeof POSTHOG_EVENTS];

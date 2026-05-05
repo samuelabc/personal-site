@@ -139,13 +139,16 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - External assets (images, book covers) should be downloaded and stored locally for performance rather than hotlinked
 - Images in containers should fit without cropping — reduce image size to fit rather than clipping at container edges
 - Plan-first workflow: brainstorm/review first, create plan docs in docs/plans/, then implement from the plan
+- Links to PDFs and external documents should open in a new tab (target="_blank"), not trigger direct downloads
 
 ## Learned Workspace Facts
 
 - Tech stack: Astro framework, pnpm package manager, Tailwind CSS for styling
 - Deployed on Cloudflare Pages, domain is samuelthien.site
 - PostHog analytics integrated with centralized event names and a shared capture utility
-- Site sections: About, Selected Work (projects), Bookshelf, Experience (work history)
+- Site sections: About, Selected Work (projects), Bookshelf, Experience (work history), Talks
 - Key projects on the site: ReplyHero (cofounded, auto-reply SaaS), YoTalent (AI hackathon champion at Mercedes), AI PR Review (VSCode extension), datetime-helper
 - Bookshelf page features: "The Beginning of Infinity" (general), "Designing Data-Intensive Applications" and "Building Evolutionary Architecture" (technical)
+- Talks section serves Slidev presentations as static HTML from public/talks/; talk data in src/data/talks.ts; links need `data-astro-reload` to bypass Astro View Transitions (ClientRouter); `serveSpaFallback` Vite plugin in astro.config.mjs resolves directory URLs to index.html in dev
+- Resume PDF at public/samuel-thien-resume.pdf, linked from Hero section as secondary CTA with PostHog tracking
 

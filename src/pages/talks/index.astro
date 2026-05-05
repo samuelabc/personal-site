@@ -1,0 +1,113 @@
+---
+import Base from "../../layouts/Base.astro";
+import { talks } from "../../data/talks";
+---
+
+<Base
+  title="Talks — Samuel Thien"
+  description="Slide decks from talks I've given on distributed systems, durable execution, and software engineering."
+  canonicalPath="/talks"
+>
+  <section class="pt-12 sm:pt-20 pb-16 sm:pb-20">
+    <div class="mb-12 sm:mb-16 reveal">
+      <h1
+        class="font-display text-4xl sm:text-6xl lg:text-7xl font-bold tracking-[-0.02em] leading-[0.95] mb-4"
+      >
+        Talks
+      </h1>
+      <p class="text-lg sm:text-xl text-ink-soft max-w-md leading-relaxed">
+        Sharing what I've learned, one deck at a time.
+      </p>
+    </div>
+
+    <div class="flex flex-col gap-4">
+      {talks.map((talk) => (
+        <article
+          class="group rounded-xl border border-rule bg-bg-card p-5 sm:p-7 transition-shadow duration-400 ease-smooth hover:shadow-[0_4px_20px_oklch(0%_0_0_/_0.05)] reveal"
+        >
+          <span class="font-ui text-xs text-ink-muted mb-3 block">
+            {talk.date}{talk.event ? ` · ${talk.event}` : ""}
+          </span>
+
+          <h2 class="font-display text-xl sm:text-2xl font-bold italic tracking-[-0.01em] leading-tight mb-3">
+            {talk.title}
+          </h2>
+
+          <p class="text-[15px] leading-[1.75] text-ink-soft mb-6 max-w-2xl">
+            {talk.description}
+          </p>
+
+          <div class="flex flex-wrap items-center gap-2.5">
+            <a
+              href={talk.slidesPath}
+              data-talk-slug={talk.slug}
+              data-track-event="talk-click"
+              data-astro-reload
+              class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-ui text-xs transition-all duration-250 ease-smooth hover:shadow-[0_4px_16px_oklch(48%_0.10_150_/_0.25)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              View Slides
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 12L12 4M12 4H5M12 4v7" />
+              </svg>
+            </a>
+            <a
+              href={`${talk.slidesPath}${talk.pdfFilename}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-talk-slug={talk.slug}
+              data-track-event="talk-pdf-download"
+              class="inline-flex items-center gap-2 px-4 py-2 border border-rule rounded-lg font-ui text-xs text-ink transition-all duration-250 ease-smooth hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14m-6-6 6 6 6-6" />
+                <path d="M4 19h16" />
+              </svg>
+              Download PDF
+            </a>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { POSTHOG_EVENTS, capturePostHogEvent } from "../../data/analytics";
+
+  function initTalkPageTracking() {
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="talk-click"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const slug = link.dataset.talkSlug;
+          if (!slug) return;
+          capturePostHogEvent(POSTHOG_EVENTS.TALK_CLICK, {
+            talk_slug: slug,
+            location: "talks_page",
+          });
+        });
+      });
+
+    document
+      .querySelectorAll<HTMLAnchorElement>('a[data-track-event="talk-pdf-download"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+
+        link.addEventListener("click", () => {
+          const slug = link.dataset.talkSlug;
+          if (!slug) return;
+          capturePostHogEvent(POSTHOG_EVENTS.TALK_PDF_DOWNLOAD, {
+            talk_slug: slug,
+            location: "talks_page",
+          });
+        });
+      });
+  }
+
+  initTalkPageTracking();
+  document.addEventListener("astro:page-load", initTalkPageTracking);
+</script>

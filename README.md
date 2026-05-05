@@ -18,6 +18,7 @@ Astro generates everything at build time. Pages pull from TypeScript data module
 - **Tailwind CSS 4** — `@theme` tokens in `global.css`, no config file
 - **TypeScript** — data modules and the OG image pipeline
 - **Satori + resvg-js** — build-time Open Graph images
+- **Slidev** — talk slides built from Markdown source in `slides/`
 - **PostHog** — analytics (optional, needs env vars)
 
 ## Project structure
@@ -59,9 +60,11 @@ pnpm install
 
 ```bash
 pnpm dev       # dev server at localhost:4321
-pnpm build     # static build to dist/
+pnpm build     # build slides + static site to dist/
 pnpm preview   # preview the production build
 ```
+
+Slides in `slides/` are built automatically during `pnpm build` and output to `public/talks/durable-execution/`. The built slides are gitignored.
 
 ### Environment variables
 
@@ -73,4 +76,4 @@ PostHog analytics is optional. The site runs fine without it.
 
 ## Deployment
 
-Builds to static HTML in `dist/`. No server, no runtime, no edge functions. Drop the files anywhere — Vercel, Netlify, S3, whatever serves HTML.
+Hosted on Cloudflare Pages. Builds to static HTML in `dist/`.

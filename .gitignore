@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 .astro/
+public/talks/durable-execution/
 
 # Logs
 npm-debug.log*

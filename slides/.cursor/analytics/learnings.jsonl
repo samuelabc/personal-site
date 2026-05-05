@@ -1,0 +1,9 @@
+{
+  "ts": "2026-04-30T16:28:29Z",
+  "skill": "slidev",
+  "type": "operational",
+  "key": "mermaid-subgraph-stacking",
+  "insight": "Mermaid flowchart subgraphs without inter-subgraph edges render side-by-side. Use invisible edges (~~~) between subgraphs to force vertical stacking in TD flowcharts.",
+  "confidence": "9",
+  "source": "observed"
+}
