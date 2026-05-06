@@ -2,6 +2,7 @@
 theme: default
 title: "Durable Execution: An Introduction"
 author: Samuel Thien
+routerMode: hash
 colorSchema: light
 aspectRatio: 16/9
 canvasWidth: 980
@@ -19,7 +20,6 @@ fonts:
   weights: '300,400,500,600,700,800'
 defaults:
   transition: fade
-download: true
 exportFilename: durable-execution-talk
 ---
 
