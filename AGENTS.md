@@ -140,6 +140,9 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - Images in containers should fit without cropping — reduce image size to fit rather than clipping at container edges
 - Plan-first workflow: brainstorm/review first, create plan docs in docs/plans/, then implement from the plan
 - Links to PDFs and external documents should open in a new tab (target="_blank"), not trigger direct downloads
+- Button icons should use proper metaphors (download-with-tray icon for downloads, not bare chevrons)
+- Prefer improving design elements in place rather than removing functionality
+- Critical about icon sizing and click targets (16px icons too small for mobile interaction)
 
 ## Learned Workspace Facts
 
@@ -151,4 +154,8 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - Bookshelf page features: "The Beginning of Infinity" (general), "Designing Data-Intensive Applications" and "Building Evolutionary Architecture" (technical)
 - Talks section serves Slidev presentations as static HTML from public/talks/; talk data in src/data/talks.ts; links need `data-astro-reload` to bypass Astro View Transitions (ClientRouter); `serveSpaFallback` Vite plugin in astro.config.mjs resolves directory URLs to index.html in dev
 - Resume PDF at public/samuel-thien-resume.pdf, linked from Hero section as secondary CTA with PostHog tracking
+- Slidev presentations build automatically from slides/ directory during site builds to avoid committing build artifacts
+- Slidev frontmatter must NOT include `download: true` — it triggers Playwright PDF export during build, which fails in CI (Cloudflare Pages has no Chromium). Use `pnpm build:slides:pdf` locally instead.
+- Build pipeline uses build:slides script that installs dependencies and builds with correct base path
+- SPA routing issues require _redirects configuration for Cloudflare Pages to handle deep links
 
