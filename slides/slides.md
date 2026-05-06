@@ -2,7 +2,6 @@
 theme: default
 title: "Durable Execution: An Introduction"
 author: Samuel Thien
-routerMode: hash
 colorSchema: light
 aspectRatio: 16/9
 canvasWidth: 980
@@ -20,6 +19,7 @@ fonts:
   weights: '300,400,500,600,700,800'
 defaults:
   transition: fade
+download: true
 exportFilename: durable-execution-talk
 ---
 
@@ -597,7 +597,85 @@ flowchart TD
 </div>
 
 <!--
-Let me show you where these tools fall on the architecture spectrum. On one end, you've got the embedded library approach -- that's DBOS. Your app includes the DBOS library directly, and it checkpoints to a Postgres database you already have. No extra services, no cluster to manage. In the middle, you've got something like Restate -- a single server binary that your app connects to via an SDK. It manages a journal of execution state. And on the other end, Temporal runs a full server cluster with four internal services -- Frontend, History, Matching, and Worker -- plus its own database. The trade-off is straightforward: less infrastructure means you can get started faster, but more infrastructure gives you more features at scale. For today, I want the simplest path to show you the concepts.
+Let me show you where these tools fall on the architecture spectrum. On one end, you've got the embedded library approach -- that's DBOS. Your app includes the DBOS library directly, and it checkpoints to a Postgres database you already have. No extra services, no cluster to manage. In the middle, you've got something like Restate -- a single server binary that your app connects to via an SDK. It manages a journal of execution state. And on the other end, Temporal runs a full server cluster with four internal services -- Frontend, History, Matching, and Worker -- plus its own database. The trade-off is straightforward: less infrastructure means you can get started faster, but more infrastructure gives you more features at scale. Let me show you the actual architecture of each.
+-->
+
+---
+
+<p class="eyebrow">The Landscape — Cluster</p>
+
+# Temporal — Dedicated cluster
+
+<div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 1.5rem; align-items: center; margin-top: 0.5rem;">
+<div>
+
+- **4 internal services** — Frontend, History, Matching, Worker
+- **Separate worker processes** — your code runs in workers that poll the server
+- **Cassandra, Postgres, or MySQL** for persistence
+- **Horizontally scalable** — battle-tested at Netflix, DoorDash scale
+
+</div>
+<div>
+
+<img src="/temporal-architecture.png" style="width: 100%; border-radius: 8px; border: 1px solid var(--border);" />
+
+</div>
+</div>
+
+<!--
+Starting from the heavy end of the spectrum. Temporal runs a full server cluster with four internal services. Your application code runs in separate worker processes that poll the Temporal server for tasks. The server manages all the workflow state, history, and task routing. It's backed by Cassandra, Postgres, or MySQL. This is the most battle-tested option -- Netflix, DoorDash, Snap all run it in production. The trade-off is clear: you get a rich feature set but you're operating a distributed system on top of your distributed system.
+-->
+
+---
+
+<p class="eyebrow">The Landscape — Lightweight</p>
+
+# Restate — Lightweight server
+
+<div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 1.5rem; align-items: center; margin-top: 0.5rem;">
+<div>
+
+- **Single binary** with built-in event replication
+- **Journal-based execution** — replays from an append-only log
+- **Integrates with Lambda, K8s, ECS** — your code runs wherever you want
+- **Object store durability** — snapshots state to S3-compatible storage
+
+</div>
+<div>
+
+<img src="/restate-architecture.png" style="width: 100%; border-radius: 8px; border: 1px solid var(--border);" />
+
+</div>
+</div>
+
+<!--
+In the middle of the spectrum, Restate takes a different approach. It's a single server binary -- no cluster of services to manage. Your application connects via an SDK, and Restate journals every step of execution. It integrates with existing compute -- Lambda, Kubernetes, ECS -- so your code runs wherever you already deploy. State is durable through low-latency event replication between nodes, with snapshots going to an object store. Less infrastructure than Temporal, but still a separate component in your stack.
+-->
+
+---
+
+<p class="eyebrow">The Landscape — Embedded</p>
+
+# DBOS — Embedded library
+
+<div style="display: grid; grid-template-columns: 1fr 1.4fr; gap: 1.5rem; align-items: center; margin-top: 0.5rem;">
+<div>
+
+- **Library inside your app** — no separate server or cluster
+- **Checkpoints to Postgres** — the database you already run
+- **Workflows, queues, messaging** built into the library
+- **Zero extra infrastructure** — simplest path to durable execution
+
+</div>
+<div>
+
+<img src="/dbos-architecture.png" style="width: 100%; border-radius: 8px; border: 1px solid var(--border);" />
+
+</div>
+</div>
+
+<!--
+And at the lightest end of the spectrum, DBOS embeds directly into your application as a library. There's no separate server, no cluster, no additional infrastructure to manage. It checkpoints workflow state to a Postgres database -- the one you probably already have running. Workflows, queues, and messaging are all built into the library. You add a few lines to your existing code and you've got durable execution. The trade-off is that you get fewer operational features out of the box compared to Temporal, but the barrier to entry is nearly zero.
 -->
 
 ---
@@ -741,15 +819,13 @@ Next up, same building blocks but a completely different use case. This is an AI
 
 # Durable agent workflow (Python)
 
-```python {1|3-6|8-10|11|13-14|16-18}{at:1}
+```python {1|3-4|6-8|9|11-12|14-16}{at:1, maxHeight:'380px'}
 @DBOS.workflow()
 def durable_agent(request: AgentStartRequest):
-    # Do work...
-    agent_status = AgentStatus(name=request.name, task=request.task,
-                               status="working")
+    agent_status = AgentStatus(name=request.name, task=request.task, status="working")
     DBOS.set_event(AGENT_STATUS, agent_status)
 
-    # Pause: wait for human approval (survives crashes)
+    # Durable wait for human approval (survives crashes)
     agent_status.status = "pending_approval"
     DBOS.set_event(AGENT_STATUS, agent_status)
     approval = DBOS.recv(timeout_seconds=3600)
@@ -757,7 +833,6 @@ def durable_agent(request: AgentStartRequest):
     if approval is None or approval.response == "deny":
         raise Exception("Agent denied or timed out")
 
-    # Approved — continue working
     agent_status.status = "working"
     DBOS.set_event(AGENT_STATUS, agent_status)
     return "Agent successful"
@@ -880,80 +955,45 @@ So when should you actually reach for durable execution? And what are the things
 
 <p class="eyebrow">Guidance</p>
 
-# When to use durable execution
+# When to use it — and when to skip it
 
-<p class="text-secondary" style="font-size: 0.95rem; margin-bottom: 0.25rem;">Quick gut check: can you describe the work as a single verb — <em>send, process, sync</em>? It's a job. Need "and then" or "wait until"? It's a process.</p>
+<div class="compact-table grid grid-cols-2 gap-4" style="margin-top: 0.15rem;">
+<div>
 
-```mermaid {scale: 0.3}
-flowchart TD
-    A["Does your operation have multiple steps?"] -->|No| B["Standard code is fine"]
-    A -->|Yes| C["Can steps fail independently of each other?"]
-    C -->|No| D["Single DB transaction\n(e.g. transfer between accounts)"]
-    C -->|Yes| E["Do steps call external APIs or services?"]
-    E -->|No| F["Savepoints or nested transactions"]
-    E -->|Yes| G["Would partial failure leave the system in a broken state?"]
-    G -->|No| H["Retry the whole operation\n(e.g. send a notification email)"]
-    G -->|Yes| I["Does the process involve long waits?\n(hours, days, human approvals)"]
-    I -->|No| J["Saga with manual checkpoint,\nor durable execution for simplicity"]
-    I -->|Yes| K["Durable execution\nThis is exactly what it's for."]
-```
+**Reach for DE when...**
 
-<!--
-Here's a quick way to think about it. If you can describe the work as a single verb -- send an email, process an image, sync a record -- it's a job. Use a queue. If you need "and then" or "wait until" to describe it, it's a process. That's when this decision tree matters.
+| Scenario | Why |
+|---|---|
+| **Payment + fulfillment** | Crash = money taken, no delivery |
+| **Multi-step approvals** | Must survive restarts across human-speed waits |
+| **AI agent orchestration** | LLM calls cost money; retry wastes $ and context |
+| **Saga with rollback** | Forward and compensating steps must both complete |
 
-Start at the top. Multi-step? If not, standard code is fine. Can steps fail independently? If not, a single database transaction covers you. Do they call external APIs? If everything stays in your database, savepoints work. Would partial failure leave the system inconsistent? If retry-from-scratch is cheap and safe, do that.
+</div>
+<div>
 
-Now the last branch is where it gets nuanced. If partial failure IS dangerous, the question becomes: does the process involve long waits? If it's a fast multi-step operation -- say three API calls that finish in seconds -- you can build a saga with manual checkpointing, or use durable execution for the simpler programming model. Both work. But if the process involves human approvals, webhook waits, or anything that spans hours or days, durable execution is the clear answer. That's where the durable suspension and zero-resource waiting really pay for themselves.
--->
+**Skip DE when...**
 
----
+| Scenario | Use instead |
+|---|---|
+| **Single-step CRUD** | Direct DB call |
+| **Millisecond-fast ops** | Inline code (checkpoint adds 1-5ms) |
+| **Database-local work** | Single transaction or savepoints |
+| **Cheap-to-retry ops** | Job queue (BullMQ, Celery) |
 
-<p class="eyebrow">Guidance</p>
+</div>
+</div>
 
-# Where durable execution earns its keep
-
-| Scenario | Why DE | What breaks without it |
-|---|---|---|
-| **Payment + fulfillment** | Steps cross service boundaries with irreversible side effects | Crash between charge and dispatch = charged customer, no delivery |
-| **Multi-step approvals** (days/weeks) | Process must survive restarts across human-speed waits | Polling state machine: ~40,000 wasted DB queries over 14 days |
-| **AI agent orchestration** | LLM calls are expensive and non-idempotent | Retry from scratch = repeated $0.10+ API calls, lost agent context |
-| **Saga workflows with rollback** | Forward + compensating steps must both complete despite crashes | Manual compensation code that itself can fail mid-rollback |
+<div v-click class="callout" style="margin-top: 0.25rem;">
+<p>Gut check: describe the work as a single verb -- <em>send, process, sync</em>? It's a job, use a queue. Need "and then" or "wait until"? It's a workflow.</p>
+</div>
 
 <!--
-Four scenarios where durable execution actually pays for itself. Payment plus fulfillment -- you saw this earlier with the checkout demo. The payment API charges real money, and the warehouse notification is a separate call. A crash between those two means a customer is out money with no order on the way. No retry loop fixes that without idempotency keys and checkpointed progress.
+Here's the practical split. On the left, the scenarios where durable execution actually pays for itself. Payment plus fulfillment -- the checkout demo. Multi-step approvals -- the access management demo. AI agent orchestration -- LLM calls cost real money, and retrying from scratch wastes money and loses context. And saga workflows where both the forward path and compensation must complete.
 
-Multi-step approvals -- this is the access management demo. A request sits waiting for Bob, then Alice, potentially for days. Without durable execution, you need a workflow_state column and a polling loop. At 30-second intervals over 14 days, that's roughly 40,000 queries for a single request. And if the server redeploys during that window, you lose track of where you were unless you built your own state machine.
+On the right, where you should skip it. Single-step CRUD -- there's nothing to checkpoint between. Fast operations where the checkpoint overhead dominates latency. Database-local work where ACID already gives you atomicity. And cheap-to-retry operations where a job queue with built-in retry is simpler and sufficient.
 
-AI agent orchestration is newer but the economics are clear. A GPT-4 call costs real money. If your agent runs five reasoning steps at $0.10 each and crashes at step four, retrying from scratch wastes $0.30 and may produce different results because LLM outputs aren't deterministic. Checkpointing each step means recovery picks up from step four, not step one.
-
-Saga workflows -- provisioning a role in an external system, then rolling back the local assignment if it fails. Both the forward step and the compensation step need to complete. If the compensation itself crashes halfway through, you're stuck in a worse state than before. Durable execution checkpoints the compensation, so it finishes on recovery.
--->
-
----
-
-<p class="eyebrow">Guidance</p>
-
-# When to skip it
-
-| Scenario | Why not | Use instead |
-|---|---|---|
-| **Single-step CRUD** | No multi-step coordination to protect -- checkpoint overhead is pure cost | Direct DB call |
-| **Millisecond-fast operations** | Checkpoint write adds 1-5ms per step -- dominates total latency | Inline code, no framework |
-| **Purely database-local work** | ACID transactions already guarantee atomicity within one DB | Single transaction or savepoints |
-| **Cheap-to-retry operations** | If full retry is safe and fast, checkpointing complexity isn't justified | Job queue with retry (BullMQ, Celery) |
-
-<!--
-Now the other side. Durable execution has real overhead -- every step is a database write, and every workflow carries the determinism constraint. That overhead buys you crash recovery. If you don't need crash recovery, you're paying for nothing.
-
-Single-step CRUD -- updating a user's profile, inserting a record. There's one step. Nothing to checkpoint between. The database write IS the operation.
-
-Millisecond-fast operations -- each checkpoint is a Postgres write, typically 1 to 5 milliseconds. If your operation takes 2ms total, adding a checkpoint doubles the latency. That's a bad trade for something that doesn't need recovery.
-
-Purely database-local work -- if every step is a query against the same Postgres instance, wrap them in a transaction. ACID gives you atomicity for free. You don't need a separate checkpoint mechanism for work that never leaves the database.
-
-And cheap-to-retry operations -- sending a notification email, resizing an image. If the whole thing fails, retry it from the top. The cost of re-running is low, the side effects are harmless or idempotent. A job queue with built-in retry handles this fine. Don't bring in durable execution when BullMQ or Celery will do.
-
-The common mistake I see: teams wrapping every background job in a durable workflow because the framework is there. Match the tool to the problem. If retry-from-scratch is cheap and safe, skip the complexity.
+The gut check at the bottom: if you can describe the work with a single verb -- send an email, resize an image -- it's a job, use a queue. If you need "and then" or "wait until" to describe it, it's a workflow, and that's when durable execution earns its keep.
 -->
 
 ---
@@ -1015,195 +1055,393 @@ Here's something I want to be honest about. There's a principle in systems desig
 -->
 
 ---
-
-<p class="eyebrow">Guidance</p>
-
-# Durable execution vs event-driven
-
-<div class="grid grid-cols-2 gap-8" style="margin-top: 1rem;">
-<div>
-
-### Orchestration
-
-**Durable execution**
-
-*"Given this input, execute these steps in order."*
-
-Central coordinator. The workflow knows the full plan.
-
-</div>
-<div>
-
-### Choreography
-
-**Event-driven (Kafka, etc.)**
-
-*"Something happened; whoever cares can react."*
-
-No coordinator. Services react independently.
-
-</div>
-</div>
-
-<p v-click class="text-secondary" style="margin-top: 1.5rem; font-size: 0.95rem; max-width: 60ch;">Forward logic is ~10% of most applications. Error handling and crash recovery are ~90%. In a workflow, that 90% lives in one place. In event-driven, it's scattered across independent handlers.</p>
-
-<div v-click class="callout" style="margin-top: 1rem;">
-<p>They're <strong>complementary</strong>. Use Kafka for event distribution. Use durable execution for the multi-step workflow triggered by those events.</p>
-</div>
-
-<!--
-This is probably the most common question people ask: how is this different from just using Kafka? Here's the distinction. Durable execution is orchestration. You've got a central coordinator -- the workflow function -- that says: given this input, execute these steps in this order. Event-driven architecture, like Kafka, is choreography. Something happened, and whoever cares about it can react independently. No central coordinator.
-
-Here's the thing that makes the difference concrete. Mike Stonebraker -- Postgres creator, Turing Award winner -- published a paper earlier this year called "Goto Considered Harmful," the 2026 version. His argument: in most multi-step applications, the forward logic is only about ten percent of the code. The error handling, crash recovery, and "oops" logic is ninety percent. In a workflow architecture, that ninety percent lives in one function -- you can see the full error path, debug it, test it. In an event-driven architecture, that same logic is scattered across independent handlers that know nothing about each other. When something fails, you're trekking through multiple logs trying to reconstruct what happened.
-
-That said, they're complementary, not competing. Use Kafka for distributing events across your system. Use durable execution for the multi-step workflow that gets triggered when one of those events arrives. Event-driven wins when steps are truly independent with no durability requirements -- pure pub/sub fanout, analytics pipelines. For everything else, workflow architecture handles the hard part better.
--->
-
----
 layout: section
 transition: slide-left
 ---
 
-# Zooming Out
+# The Coordination Landscape
 
 <!--
-We've spent the whole talk inside durable execution -- what it is, how it works, when to reach for it. Now let's pull back and place it on the map. Distributed systems have accumulated decades of patterns for moving data, modeling state, coordinating work, and surviving failures. Some overlap with durable execution. Some complement it at a different layer. And a few are quietly absorbed by it -- you get them for free. We're going to focus specifically on the patterns that touch state progression over time. We're not covering scaling patterns like sharding, structural patterns like sidecar proxies, or deployment patterns like strangler fig. Those exist, they matter, but they solve different problems.
+We've seen durable execution in action -- what it is, how it works, and when to reach for it. Now let's pull back and place it on the map. When an operation spans multiple services, you need a way to keep them consistent. This problem is older than most of us in this room. Let's walk through how the field has evolved -- from distributed transactions, to sagas, to durable execution -- and see where each approach fits.
 -->
 
 ---
+layout: two-cols
+layoutClass: gap-4
+---
 
-<p class="eyebrow">Zooming Out</p>
+<p class="eyebrow">Coordination</p>
 
-# You already use these patterns. Where does DE fit?
+# The distributed transaction problem
 
-<p class="text-secondary" style="font-size: 0.85rem; margin-bottom: 0.5rem;">Scoped to patterns that manage state progression over time -- not scaling, structural, or deployment patterns.</p>
+```mermaid {scale: 0.7}
+flowchart TD
+    subgraph svcA ["Order Service"]
+        A1[("Orders DB")]
+    end
+    subgraph svcB ["Payment Service"]
+        B1[("Payments DB")]
+    end
+    subgraph svcC ["Inventory Service"]
+        C1[("Inventory DB")]
+    end
+    svcA --- Q{{"How do we keep\nthese consistent?"}}
+    Q --- svcB
+    Q --- svcC
+```
 
-| Family | Key patterns | How DE relates |
-|---|---|---|
-| **Data Flow** | Transactional outbox, CDC | **Complements.** Outbox triggers the workflow; DE runs it. |
-| **State Modeling** | Event sourcing, CQRS, actor model | **Shared DNA.** Both use "replay," but for different jobs. |
-| **Coordination** | Saga, process manager, task queues | **DE lives here.** Absorbs sagas and process managers. |
-| **Resilience** | Circuit breaker, retry, bulkhead | **Partially absorbed.** DE handles retry; circuit breaking stays yours. |
+::right::
+
+<p class="text-secondary" style="margin-top: 3.5rem;">When a single operation spans multiple services, a local DB transaction can't help you.</p>
+
+<v-clicks>
+
+- Each service has its **own database**
+- A local DB transaction can't span services
+- External APIs don't participate in DB transactions
+
+</v-clicks>
 
 <div v-click class="callout" style="margin-top: 0.75rem;">
-<p>Event sourcing replays events to reconstruct <em>state</em> -- its log lives forever with a schema evolution tax. DE replays functions to resume <em>progress</em> -- its history is ephemeral. Same word, very different cost.</p>
+<p>Three families of solutions: <strong>distributed transactions</strong> (lock everything), <strong>sagas</strong> (compensate on failure), <strong>durable execution</strong> (orchestrate as a function).</p>
 </div>
 
 <!--
-Here's the question you should be asking right now: I already use outbox, Kafka, sagas -- where does durable execution fit, and what does it actually replace? Let me give you the map. There are dozens of cloud design patterns, but we're scoping to the ones that manage state progression over time. Data flow patterns like the transactional outbox and CDC move data between systems. DE complements them -- the outbox publishes the trigger event, and DE runs the workflow that event initiates. State modeling patterns like event sourcing share DNA with DE -- both use "replay," but they replay different things. Event sourcing replays domain events to reconstruct state: what's the current balance? That log lives forever, and every schema change needs upcasters or event migration -- a maintenance tax that compounds year after year. DE replays workflow functions to resume progress: which step are we on? That history is ephemeral. Once the workflow completes, you can archive or discard it. Same word, very different operational burden. Coordination is where DE lives. It absorbs sagas and process managers into linear functions. And for resilience, DE handles retry policies and crash recovery, but circuit breakers and bulkheads remain your responsibility. These families overlap -- an outbox often drives a saga, CQRS depends on data flow. This is an editorial grouping, not a strict taxonomy.
+Here's the core problem. You have an order service with its own database, a payment service with its own database, and an inventory service with its own database. A single customer checkout touches all three. You can't wrap a cross-service operation in a Postgres transaction. So how do you keep them consistent? Three approaches exist. Distributed transactions try to lock everything. Sagas coordinate with compensation. And durable execution orchestrates the whole thing as a function. Let's look at each one.
+-->
+
+---
+layout: two-cols
+layoutClass: gap-4
+---
+
+<p class="eyebrow">Coordination</p>
+
+# Two-Phase Commit (2PC)
+
+```mermaid {scale: 0.55}
+sequenceDiagram
+    participant C as Coordinator
+    participant A as DB A
+    participant B as DB B
+
+    Note over C: Phase 1 — Prepare
+    C->>A: Prepare (lock rows)
+    A-->>C: Ready
+    C->>B: Prepare (lock rows)
+    B-->>C: Ready
+
+    Note over C: Phase 2 — Commit
+    C->>A: Commit
+    C->>B: Commit
+    Note over C,B: All committed atomically
+```
+
+::right::
+
+<p class="text-secondary" style="margin-top: 3.5rem;">A coordinator locks all participants, then commits atomically.</p>
+
+<v-clicks>
+
+- **Blocking:** participants hold locks while waiting for the coordinator's decision
+- **Fragile:** if the coordinator crashes between prepare and commit, all participants are stuck
+- **Closed-world:** every participant must support the 2PC protocol (XA, PostgreSQL `PREPARE TRANSACTION`), but external APIs don't
+- **Where it lives today:** inside distributed DBs (Google Spanner, CockroachDB), rarely across microservices
+
+</v-clicks>
+
+<!--
+Two-phase commit is the textbook answer. A coordinator sends a prepare message to every participant. Each participant locks its rows and votes "ready." Once all participants vote ready, the coordinator sends a commit message. All three databases commit atomically. It guarantees consistency -- either all commit or all abort. But it has serious problems. First, it's blocking. All participants hold locks while waiting for the coordinator's decision. If the coordinator is slow, everything waits. Second, it's fragile. If the coordinator crashes between the prepare and commit phases, every participant is stuck holding locks with no one to tell them what to do. Third, it's a closed-world protocol. Every participant must speak the XA protocol or PostgreSQL's PREPARE TRANSACTION. External APIs like Stripe or webhooks don't speak this protocol. You can't include a payment gateway call in a two-phase commit. Now, 2PC isn't dead -- it's alive and well inside distributed databases like Google Spanner and CockroachDB, where the database manages the protocol internally across shards. But across microservices with heterogeneous data stores and external APIs, it breaks down.
+
+You might wonder about 3PC -- three-phase commit. It adds a pre-commit phase to fix the blocking problem: if the coordinator crashes, participants can look at whether they reached pre-commit to decide on their own. The catch is it only works under crash-stop failures. Network partitions -- which are the realistic failure mode -- can still leave participants in inconsistent states. No major database implements 3PC. Modern systems solved 2PC's blocking problem with Paxos or Raft-based consensus instead -- that's how Spanner does it.
+-->
+
+---
+layout: two-cols
+layoutClass: gap-4
+---
+
+<p class="eyebrow">Coordination</p>
+
+# Saga pattern
+
+```mermaid {scale: 0.65}
+flowchart TD
+    T1["1. Create order"] --> T2["2. Reserve inventory"] --> T3["3. Charge payment"]
+    T3 -->|Failure| C2["Comp: Release inventory"]
+    C2 --> C1["Comp: Cancel order"]
+
+    style T1 fill:#e8f5e9,stroke:#4caf50,color:#1b5e20
+    style T2 fill:#e8f5e9,stroke:#4caf50,color:#1b5e20
+    style T3 fill:#ffebee,stroke:#f44336,color:#b71c1c
+    style C2 fill:#fff3e0,stroke:#ff9800,color:#e65100
+    style C1 fill:#fff3e0,stroke:#ff9800,color:#e65100
+```
+
+::right::
+
+<p class="text-secondary" style="margin-top: 3.5rem;">The practical alternative: break the transaction into local transactions, each with a compensating action.</p>
+
+<v-clicks>
+
+- Each step is a **local transaction** -- no distributed locks
+- If step N fails, run **compensating transactions** for steps N-1 down to 1
+- No atomicity guarantee -- the system is **eventually consistent**
+- Two coordination strategies: **choreography** and **orchestration**
+- **Framework support:** Axon Framework (Java), MassTransit (.NET), Temporal, eventuate.io
+
+</v-clicks>
+
+<!--
+The saga pattern is the practical alternative. The term comes from a 1987 paper by Garcia-Molina and Salem. Instead of trying to lock everything at once, you break the distributed transaction into a sequence of local transactions. Each step commits independently. And each step has a compensating action -- a way to undo its effect. If step three fails -- say the payment is declined -- you run compensating transactions in reverse. Release the inventory reservation. Cancel the order. No distributed locks, no 2PC coordinator. The trade-off: you lose atomicity. The system is eventually consistent, not immediately consistent. Between step one committing and step three failing, there's a window where the data is inconsistent. For many real-world systems, that's an acceptable trade. Several frameworks give you saga primitives: Axon Framework in Java, MassTransit in .NET, eventuate.io for event-driven sagas, and Temporal as a general-purpose durable workflow engine. Now, sagas need coordination -- someone or something has to decide what step runs next and what to do when something fails. There are two strategies for this: choreography and orchestration.
+-->
+
+---
+layout: two-cols
+layoutClass: gap-4
+---
+
+<p class="eyebrow">Coordination — Saga</p>
+
+# Choreography
+
+```mermaid {scale: 0.45}
+sequenceDiagram
+    participant O as Order Svc
+    participant I as Inventory Svc
+    participant P as Payment Svc
+
+    O->>O: Create order
+    O-->>I: OrderCreated
+    I->>I: Reserve inventory
+    I-->>P: InventoryReserved
+    P->>P: Charge payment
+    P-->>O: PaymentCharged
+
+    Note over O,P: If payment fails...
+    P-->>I: PaymentFailed
+    I->>I: Release inventory
+    I-->>O: InventoryReleased
+    O->>O: Cancel order
+```
+
+::right::
+
+<p class="text-secondary" style="margin-top: 3.5rem;">Each service emits events. The next service listens and reacts. No central coordinator.</p>
+
+<v-clicks>
+
+- **Decoupled:** services only know about events, not each other
+- **Hard to trace:** the full flow is implicit, scattered across event handlers
+- **Compensation is event-driven too:** failure events trigger reverse actions, but no one tracks overall status
+- **Common brokers:** Apache Kafka, RabbitMQ, NATS, Redis Streams, AWS EventBridge
+
+</v-clicks>
+
+<!--
+In a choreographed saga, there's no central coordinator. Each service reacts to events. The event transport is typically a message broker -- Kafka is the dominant choice in production, RabbitMQ for simpler setups, NATS for low-latency, Redis Streams if you're already running Redis. The order service creates the order and emits an OrderCreated event. The inventory service hears that, reserves stock, and emits InventoryReserved. The payment service hears that, charges the customer, and emits PaymentCharged. If the payment fails, it emits PaymentFailed. The inventory service hears that and releases the reservation. The order service hears that and cancels the order. The upside: services are decoupled. They don't call each other directly -- they only react to events. The downside: the full workflow is implicit. No single place in the code shows the complete flow. When something fails at step three, you're reading logs from three different services trying to reconstruct what happened. And compensation is event-driven too -- if a compensating event gets lost, the system stays inconsistent with no one noticing.
+-->
+
+---
+layout: two-cols
+layoutClass: gap-4
+---
+
+<p class="eyebrow">Coordination — Saga</p>
+
+# Orchestration
+
+```mermaid {scale: 0.5}
+sequenceDiagram
+    participant W as Orchestrator
+    participant O as Order Svc
+    participant I as Inventory Svc
+    participant P as Payment Svc
+
+    W->>O: Create order
+    O-->>W: OK
+    W->>I: Reserve inventory
+    I-->>W: OK
+    W->>P: Charge payment
+    P-->>W: Failed
+
+    Note over W: Compensation
+    W->>I: Release inventory
+    I-->>W: OK
+    W->>O: Cancel order
+    O-->>W: OK
+```
+
+::right::
+
+<p class="text-secondary" style="margin-top: 3.5rem;">A central orchestrator drives the saga. It tells each service what to do and handles failures.</p>
+
+<v-clicks>
+
+- **Visible:** the full flow lives in one place -- the orchestrator
+- **Debuggable:** one log stream, one state to inspect
+- **But:** the orchestrator itself must be reliable -- if it crashes mid-saga, the whole thing stalls
+- **Tools:** Temporal, Camunda (BPMN), AWS Step Functions, Netflix Conductor (now Orkes)
+
+</v-clicks>
+
+<!--
+In an orchestrated saga, a central coordinator -- the orchestrator -- drives everything. It tells the order service to create the order, waits for confirmation, tells the inventory service to reserve, waits, tells the payment service to charge, waits. If the payment fails, the orchestrator drives compensation in reverse: release inventory, cancel order. The entire flow lives in one place. One log stream. One piece of state to inspect when something goes wrong. Common orchestrator tools: Temporal and its predecessor Uber Cadence are code-first -- you write the orchestrator in Go, Java, or Python. Camunda is BPMN-based -- you draw the flow in a visual editor. AWS Step Functions is the cloud-native option, defined in JSON state machines. Netflix built Conductor (now open-sourced as Orkes) to orchestrate their microservices. The problem all of them share: the orchestrator is a single point of failure. If it crashes between charging the payment and running compensation, the saga stalls. You need retry logic, state persistence, crash recovery -- in other words, you need the orchestrator itself to be durable.
+-->
+
+---
+layout: two-cols
+layoutClass: gap-4
+---
+
+<p class="eyebrow">Coordination</p>
+
+# Where durable execution fits
+
+```mermaid {scale: 0.4}
+sequenceDiagram
+    participant W as DE Workflow
+    participant DB as Checkpoint DB
+    participant Svc as Services
+
+    W->>Svc: Create order
+    Svc-->>W: OK
+    W->>DB: Checkpoint
+    W->>Svc: Reserve inventory
+    Svc-->>W: OK
+    W->>DB: Checkpoint
+    W->>Svc: Charge payment
+    Svc-->>W: Failed
+    W->>DB: Checkpoint (failed)
+    Note over W: Compensation
+    W->>Svc: Release inventory
+    W->>DB: Checkpoint
+    W->>Svc: Cancel order
+    W->>DB: Checkpoint
+```
+
+::right::
+
+<p style="margin-top: 3.5rem;">DE is a <strong>saga orchestrator where the orchestrator itself is crash-proof</strong>.</p>
+
+<v-clicks>
+
+- The orchestrator problem -- *"what if it crashes?"* -- is solved by checkpoint/replay
+- Compensation is ordinary error handling inside a linear function
+- Unlike traditional sagas, durable messaging enables **long waits** (human approvals, webhooks)
+- **Implementations:** Temporal (server cluster), DBOS (library + Postgres), Restate (single binary), Inngest (serverless)
+
+</v-clicks>
+
+<!--
+This is where durable execution fits. It's a saga orchestrator where the orchestrator itself is crash-proof via checkpoint and replay. Every step -- forward and compensating -- gets checkpointed. If the orchestrator crashes between charging the payment and running compensation, it restarts, replays from the last checkpoint, and finishes compensation. The orchestrator problem -- "what if the coordinator crashes?" -- is solved by the same mechanism that makes each step durable. And durable execution goes beyond what a traditional saga gives you. With durable messaging, the workflow can pause for days waiting for a human approval or an external webhook, using zero resources while suspended. That's not something a classical saga pattern handles. The implementations differ in deployment model: Temporal runs as a separate server cluster with its own Cassandra or Postgres backend -- it's the heavyweight, used by Netflix and Snap. DBOS is an embedded library that uses your existing Postgres -- zero new infrastructure. Restate is a single Rust binary with journal-based replay. Inngest is serverless-native -- functions invoked via HTTP. Different trade-offs, same core pattern. 2PC is atomic but rigid. Sagas are flexible but need coordination infrastructure. Durable execution provides that infrastructure as a runtime, so you write the saga as a plain function.
+-->
+
+---
+layout: two-cols
+layoutClass: gap-4
+---
+
+<p class="eyebrow">Coordination</p>
+
+# Orchestration vs choreography
+
+Not a competition -- they compose.
+
+| | When to reach for it | Sounds like |
+|---|---|---|
+| **Orchestration** (DE) | Steps depend on each other | *"Do A, then B, then C. If C fails, undo B and A."* |
+| **Choreography** (Kafka) | Steps are independent | *"Something happened; whoever cares can react."* |
+
+::right::
+
+<div style="padding-top: 4rem;">
+
+```mermaid {scale: 0.70}
+flowchart LR
+    E["Kafka: OrderPlaced event"] --> W["DE Workflow:\nreserve → charge → dispatch"]
+    E --> N["Notification Svc:\nsend confirmation email"]
+    E --> A["Analytics Svc:\nupdate dashboard"]
+```
+
+<div v-click class="callout" style="margin-top: 0.5rem;">
+<p>Same event, different coordination needs. Kafka distributes. DE orchestrates.</p>
+</div>
+
+</div>
+
+<!--
+How is durable execution different from just using Kafka? They solve different problems and they compose. Orchestration -- what used to require hand-built process managers, now replaced by durable execution -- is for workflows where steps depend on each other. You need ordering, rollback if something fails, end-to-end visibility. Choreography -- Kafka, event-driven architecture -- is for truly independent reactions. Something happened, multiple services care, but they don't depend on each other. In practice, you use both. Kafka publishes an OrderPlaced event. A DE workflow picks it up and runs the multi-step fulfillment: reserve inventory, charge payment, dispatch. Meanwhile, the notification service sends a confirmation email and the analytics service updates a dashboard. Same event, different consumers, different coordination needs. Each tool at its own layer.
 -->
 
 ---
 
-<p class="eyebrow">Zooming Out</p>
+<p class="eyebrow">Coordination</p>
 
 # How these patterns compose in production
 
-A single food delivery order touches multiple pattern families:
+A food delivery order touches multiple coordination strategies:
 
-| Step in the order flow | Pattern | Why this one |
+| Step | Pattern | Why |
 |---|---|---|
-| Order placed, event published atomically | **Outbox + CDC** | Can't dual-write to DB and Kafka |
-| Reserve, charge, dispatch (must all complete) | **Durable execution** | Survives crashes; no double charges |
-| Payment gateway call inside a workflow step | **Circuit breaker** | DE retries alone hammer a degraded service |
-| Generate receipt PDF after fulfillment | **Job queue** (BullMQ) | Fire-and-forget -- DE would be overkill |
+| Event published atomically | **Outbox + CDC** | DB write and event must be atomic |
+| Reserve, charge, dispatch | **DE workflow** (saga) | Survives crashes; no double charges |
+| ↳ Payment gateway call | **Circuit breaker + idemp. key** | DE retries alone hammer a degraded service |
+| Send email, update analytics | **Choreography** (Kafka) | Subscribe to order event -- no new publish |
+| Generate receipt PDF | **Job queue** (BullMQ) | Loss is tolerable -- a reconciliation job catches misses |
 
-<div v-click class="callout" style="margin-top: 0.75rem;">
+<div v-click class="callout" style="margin-top: 0.25rem;">
 <p>No single pattern covers the full flow. The skill is knowing which to reach for at each layer.</p>
 </div>
 
 <!--
-This is the slide I want you to remember from this section. No single pattern covers a real production flow end to end. Take a food delivery order. When the order is placed, you need to write to the database AND publish an event to Kafka atomically. That's the outbox pattern with CDC. You can't just do two separate writes -- a crash between them loses the event. The multi-step fulfillment -- reserve inventory, charge payment, notify the kitchen, dispatch the rider -- that's durable execution. It must complete despite crashes, and you can't double-charge the customer. Inside the payment step, you need a circuit breaker around the gateway call. Without it, DE's retries during a gateway degradation will hammer it into a full outage. And after fulfillment completes, generating the receipt PDF is a fire-and-forget job. BullMQ or Celery is the right tool there -- durable execution would be overkill for a single-step task. Four patterns, four layers, one order. The value of understanding the landscape is knowing which tool belongs at which layer.
+This is the slide I want you to remember from this section. No single pattern covers a real production flow end to end. Take a food delivery order. The event publish uses the outbox pattern -- the DB write and the Kafka event must be atomic, because a lost order event means the kitchen never sees it. The multi-step fulfillment is a DE workflow -- an orchestrated saga. Inside the payment step -- notice the arrow, it's nested within the workflow -- you need a circuit breaker and an idempotency key because DE's retries alone will hammer a struggling gateway. The notification and analytics consumers subscribe to the event already published in step one via Kafka -- no separate publish, just independent consumers reacting. And the receipt PDF? A simple job queue. Could we lose it if the server crashes before enqueuing? Yes. But a nightly reconciliation query catches missing receipts -- the consequence is low. Five patterns, five layers, one order. The skill is matching the reliability investment to the consequence of failure.
 -->
 
 ---
 
-<p class="eyebrow">Zooming Out — Coordination</p>
+<p class="eyebrow">Coordination</p>
 
-# What durable execution replaces (and what it doesn't)
-
-| Pattern | Without DE | With DE |
-|---|---|---|
-| **Saga** | State machine + compensation chains + retry logic + manual partial failure handling | Compensation is ordinary error handling inside a linear function |
-| **Process manager** | Persistent state/transition table + event router + in-flight versioning | The function's control flow *is* the state machine |
-| **Queue chaining** | Each consumer triggers the next queue -- loosely coupled, but no end-to-end visibility | Single function with checkpoints -- central view, but adds coordinator dependency |
-
-<div v-click class="callout" style="margin-top: 0.75rem;">
-<p>Queue chaining trades <strong>visibility for loose coupling</strong>. DE trades <strong>coupling for visibility</strong>. Neither is wrong. DE does <em>not</em> replace high-throughput worker queues (BullMQ, Celery). That's fan-out, not orchestration.</p>
-</div>
-
-<!--
-This is where the overlap is densest. The saga pattern coordinates compensating transactions across services. Without durable execution, you build a state machine, wire up event handlers, manage compensation chains, and handle retry logic yourself. With durable execution, compensation is just regular error handling in a linear function. The process manager maintains a persistent state machine that routes events based on accumulated context. With durable execution, the function's control flow IS the state machine. You don't need a separate state/transition table. Now, queue chaining. I've seen teams chain five or six queues together, each consumer triggering the next one, to build what is effectively a state machine out of queue hops. This isn't always wrong -- it gives you loose coupling and independent scaling per step. But you lose end-to-end visibility. When something fails at step four out of six, nobody can see the full picture. Durable execution gives you that central view -- the entire workflow is one function, one place to debug. The trade-off is you now have a coordinator dependency. For most orchestration workflows, that trade-off is worth it. But durable execution does NOT replace high-throughput worker queues. If you need to resize ten million images, that's fan-out work. Use BullMQ or Celery. Durable execution adds persistence overhead per step. It's built for orchestration, not mass parallel processing.
--->
-
----
-
-<p class="eyebrow">Zooming Out — Resilience</p>
-
-# Resilience: extracted, not eliminated
-
-DE centralizes retry and recovery in the runtime. But it doesn't absorb everything.
+# What DE handles vs. what you still own
 
 | Pattern | Status | Detail |
 |---|---|---|
 | **Retry with backoff** | Absorbed | Built-in step config -- `WithStepMaxRetries(3)` with exponential backoff. |
-| **Idempotent consumer** | Mostly absorbed | Steps replay from checkpoint. External calls still need idempotency keys for the checkpoint-gap edge case. |
-| **Circuit breaker** | **Not absorbed** | Needed at the HTTP client level inside steps -- e.g., `gobreaker` (Go), `opossum` (Node). |
-| **Timeout / bulkhead** | **Not absorbed** | Context deadlines, connection pools, thread isolation -- below the workflow layer. |
+| **Idempotent consumer** | Mostly absorbed | Steps replay from checkpoint. External calls still need idempotency keys. |
+| **Circuit breaker** | **Not absorbed** | Needed at the HTTP client level -- e.g., `gobreaker` (Go), `opossum` (Node). |
+| **Timeout / bulkhead** | **Not absorbed** | Context deadlines, connection pools -- below the workflow layer. |
 
-<div v-click class="callout" style="margin-top: 0.5rem;">
-<p><strong>Without a circuit breaker, retries become an outage amplifier.</strong> 1,000 workflows x 3 retries = 3,000 requests hitting a struggling gateway.</p>
-</div>
+<v-click>
+<p class="text-secondary" style="font-size: 0.95rem; margin-top: 0.75rem;"><strong>A real failure:</strong> Grab Food order. A workflow step charges RM 45.00 via a payment gateway. Gateway processes the charge, but the response times out. DE retries. Gateway charges again -- <strong>RM 90.00 debited</strong>. Without an idempotency key, the retry creates a duplicate. Without a circuit breaker, retries pile up against a struggling service. <strong>The patterns must compose.</strong></p>
+</v-click>
 
 <!--
-Retry with backoff is built in -- you configure max retries and the runtime handles exponential backoff. Idempotent consumer is mostly covered by checkpoint replay, but there's a subtle edge case: if a step succeeds externally but the process crashes before writing the checkpoint, that step re-executes on recovery. External calls like payments still need idempotency keys. Circuit breaker is explicitly NOT absorbed by DE. If a downstream service is degraded, DE's retries alone will keep hammering it. You need a circuit breaker at the HTTP client level. Same for timeouts and bulkheads -- those are infrastructure-level concerns below the workflow layer.
+DE handles some resilience patterns for you, but not all. Retry with backoff -- that's built in. Idempotent consumer is mostly covered by checkpoint replay, but external calls still need idempotency keys for the edge case where a step succeeds but the checkpoint write fails. Circuit breakers and timeouts are explicitly not absorbed -- those live at the HTTP client level inside your steps.
+
+The Grab Food example makes this concrete. A workflow step charges RM 45 via the payment gateway. The gateway processes it, money leaves the customer's Touch 'n Go wallet, but the response times out. DE sees a failure and retries. The gateway charges again. The customer is out RM 90. Without an idempotency key on the payment request, the retry created a duplicate charge. Without a circuit breaker, if the gateway is struggling, those retries pile up and make it worse. DE provides retry and resume. Idempotency keys prevent duplicate side effects. Circuit breakers prevent retry storms. No single pattern handles all of this alone.
 -->
 
 ---
 
-<p class="eyebrow">Zooming Out — Resilience</p>
-
-# Where patterns break — a real failure
-
-A Grab Food order. The workflow charges the customer via a payment gateway.
-
-| Step | What happens |
-|---|---|
-| 1 | DE workflow calls the payment gateway with amount RM 45.00 |
-| 2 | Gateway processes the charge -- money leaves the customer's account |
-| 3 | Gateway's response **times out** (network blip, not a 500) |
-| 4 | DE sees a failure. Retries the step. |
-| 5 | Gateway processes the charge **again** -- RM 45.00 debited twice |
-
-<div v-click class="callout" style="margin-top: 1rem;">
-<p>DE alone doesn't prevent this. You need <strong>idempotency keys</strong> on every external call, so the gateway rejects the duplicate. And a <strong>circuit breaker</strong> so retries don't pile up against a struggling service. The patterns must compose.</p>
-</div>
-
-<!--
-Let me walk through a specific failure to show why no single pattern is enough. Imagine a Grab Food order. The durable workflow reaches the payment step and calls the gateway to charge RM 45. The gateway processes it -- the money actually leaves the customer's Touch 'n Go wallet. But the response never comes back. Maybe a network blip, maybe the gateway was slow. From the workflow's perspective, the step failed. So DE retries. The gateway processes the charge again. The customer is now out RM 90 for a RM 45 order. Durable execution did exactly what it promised -- it retried the failed step. But without an idempotency key on that payment request, the retry created a duplicate charge. And without a circuit breaker, if the gateway is struggling under load, those retries pile up and make it worse. The lesson: these patterns must compose. DE provides retry and resume. Idempotency keys prevent duplicate side effects at the API boundary. Circuit breakers prevent retry storms against degraded services. No single pattern handles all of this alone.
--->
-
----
-
-<p class="eyebrow">Zooming Out</p>
+<p class="eyebrow">Coordination</p>
 
 # Choosing the right tool
 
 | You need to... | Reach for | Not |
 |---|---|---|
+| Atomic commit across DBs | **2PC** (within a DB cluster) | 2PC across services (fragile) |
 | DB write + event publish atomically | **Outbox + CDC** | Dual writes (DB then Kafka) |
-| Multi-step process that must survive crashes | **Durable execution** | Custom state machine + polling |
-| Roll back across services on failure | **Saga** (via DE) | Distributed transactions (2PC) |
-| Single-step background work | **Job queue** (BullMQ, Celery) | DE (overkill for fire-and-forget) |
-| High-volume event streams | **Stream processing** (Flink, Kafka Streams) | DE (wrong tool) |
+| Multi-step process with rollback | **Durable execution** (saga built in) | Custom state machine + polling |
+| Independent reactions to events | **Choreography** (Kafka) | Orchestration (unnecessary coupling) |
+| Single-step, loss-tolerable work | **Job queue** (BullMQ, Celery) | DE (overkill for reconciliation jobs) |
 | Full audit trail of state changes | **Event sourcing** | Mutable rows with `updated_at` |
 
-<div v-click class="callout" style="margin-top: 0.5rem;">
-<p>Common mistake: reaching for DE when a job queue would suffice, or hand-rolling a state machine when DE would save weeks.</p>
+<div v-click class="callout" style="margin-top: 0.25rem;">
+<p>Common mistake: reaching for DE when a job queue would do, or hand-rolling a state machine when DE would save weeks.</p>
 </div>
 
 <!--
-This is the quick reference version. Need to write to a database and publish an event atomically? Outbox plus CDC. Need a multi-step process that must complete despite crashes? Durable execution. Need to roll back across services when something fails? That's a saga, and you implement it with durable execution. Single-step background work like sending an email or resizing an image? A job queue is the right call. Durable execution would be overkill for fire-and-forget tasks. Processing high-volume event streams in real time? That's Flink or Kafka Streams territory. Need a full audit trail of every state change? Event sourcing. The most common mistake I see: teams reaching for durable execution when a simple job queue would do the job, or spending weeks hand-rolling a state machine when a durable workflow would have saved them that entire effort. Match the tool to the layer.
+Quick reference. Atomic commit within a database cluster? 2PC works there -- but not across services. Atomic event publish? Outbox plus CDC. Multi-step process that must survive crashes and roll back on failure? Durable execution -- saga compensation is built in, it's not a separate tool. Independent event reactions? Choreography with Kafka. Single-step work where loss is tolerable? Job queue -- a reconciliation job catches gaps. State change audit trail? Event sourcing. The most common mistakes: reaching for DE when a job queue would do, or spending weeks building a state machine when a durable workflow would have saved that entire effort.
 -->
 
 ---
@@ -1211,7 +1449,7 @@ layout: center
 ---
 
 <div class="pull-quote">
-Write workflows as ordinary functions. The runtime keeps their progress durable across crashes, restarts, and days-long waits.
+Write workflows as ordinary functions. The runtime makes them survive crashes, restarts, and days-long waits.
 </div>
 
 <!--
@@ -1237,7 +1475,7 @@ This is the one sentence I want you to take away from this talk. You write workf
 
 Checkpointing. Replay. Determinism. Durable messaging.
 
-**The tools differ in ergonomics and operations. These ideas are what stay the same.**
+**The tools change. These four ideas don't.**
 
 </div>
 

@@ -106,6 +106,12 @@ pre.shiki {
   line-height: 1.6 !important;
 }
 
+/* Make non-highlighted lines more readable (default is 0.3) */
+.slidev-code .line.dishonored,
+.slidev-code .line.slidev-code-dishonored {
+  opacity: 0.55 !important;
+}
+
 /* --- Blockquotes --- */
 
 blockquote {
@@ -302,4 +308,23 @@ tr:last-child td {
 
 .callout p strong {
   font-weight: 700;
+}
+
+/* --- Compact table variant for space-constrained slides --- */
+
+.compact-table td,
+.compact-table th {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+/* --- Constrain mermaid SVGs inside grid columns --- */
+
+.grid .mermaid {
+  overflow: hidden;
+}
+
+.grid .mermaid svg {
+  max-width: 100% !important;
+  height: auto !important;
 }
