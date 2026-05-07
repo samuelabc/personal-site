@@ -120,8 +120,6 @@ Now let's go through what most developers instinctively reach for when they hit 
 
 ---
 
-<p class="eyebrow">Escalation</p>
-
 # Long-running workflows — a solved problem?
 
 You've all built this before.
@@ -303,7 +301,7 @@ For replay to work, the function must produce the **same sequence of steps** eve
 <div v-click class="grid grid-cols-2 gap-2" style="margin-top: 0.25rem;">
 <div>
 
-<p style="margin: 0 0 0.25rem; font-weight: 600; color: var(--danger);">Breaks replay</p>
+<p style="margin: 0 0 0.25rem; font-weight: 600; color: var(--danger);">This breaks replay</p>
 
 ```go
 func dispatchWorkflow(ctx WorkflowCtx, orderID int) {
@@ -402,18 +400,35 @@ The fix: wrap the clock read in a checkpointed step. On replay, the runtime retu
 
 # Durable Messaging
 
-If you know Go channels, you already know this.
+<span style="color: var(--text-secondary); font-size: 1rem;">If you know Go channels, you already know this.</span>
+
+<div style="margin-top: 0.25rem;">
 
 <v-click>
 
-**The idea:** Two primitives — `Recv` blocks a workflow until a message arrives, `Send` delivers it. Like `<-ch` and `ch <-`, but the state lives in the database.
+**The idea:** Two primitives
 
 </v-click>
 
-<div v-click class="grid grid-cols-2 gap-4" style="margin-top: 0.5rem;">
+<v-click>
+
+1. `Recv` blocks a workflow until a message arrives.
+2. `Send` delivers it.
+
+</v-click>
+
+<v-click>
+
+<p style="font-size: 0.95rem; margin-top: 0.25rem;">Like <code>&lt;-ch</code> and <code>ch &lt;-</code>, but the state lives in the database (survives restarts, waits for days with zero compute)</p>
+
+</v-click>
+
+</div>
+
+<div v-click class="grid grid-cols-2 gap-3" style="margin-top: 0.25rem; font-size: 0.85rem;">
 <div>
 
-<p style="margin: 0 0 0.25rem; font-weight: 600;">Go channel</p>
+<p style="margin: 0 0 0.15rem; font-weight: 500; font-size: 0.9rem;">Go channel</p>
 
 ```go
 ch := make(chan string)
@@ -428,7 +443,7 @@ ch <- "approved"
 </div>
 <div>
 
-<p style="margin: 0 0 0.25rem; font-weight: 600;">Durable messaging</p>
+<p style="margin: 0 0 0.15rem; font-weight: 500; font-size: 0.9rem;">Durable messaging</p>
 
 ```go
 // workflow blocks until message arrives
@@ -442,13 +457,12 @@ dbos.Send(ctx, wfID, "approval", "approved")
 </div>
 </div>
 
-<v-click>
-
-<div class="callout" style="margin-top: 0.75rem;">
-<p>Same idea — <strong>block until a value shows up</strong>. But durable: state lives in the DB, survives restarts, and can wait for days with zero compute.</p>
-</div>
-
-</v-click>
+<style>
+.slidev-layout { padding: 2.25rem 3rem; }
+h1 { font-size: 2rem; margin-bottom: 0.15rem; }
+p, li { font-size: 0.95rem; line-height: 1.45; }
+pre.shiki { font-size: 0.85rem !important; line-height: 1.6 !important; }
+</style>
 
 <!--
 If you know Go channels, you already know this pattern. On the left -- a plain Go channel. One goroutine blocks on receive, another sends a value, the first one wakes up. On the right -- durable messaging. Same shape. Recv blocks the workflow, Send delivers a message, the workflow wakes up. The difference: a Go channel lives in memory. Process dies, it's gone. Durable messaging persists the suspension point to the database. The server can restart fifty times over seven days. When the human finally clicks approve, the send arrives, and the workflow picks up right where it left off. No thread held, no connection open. The whole workflow state fits in a single DB row. Same mental model, but crash-proof.
@@ -718,7 +732,7 @@ Enough theory. Let's look at real code. I've got three demos lined up, each buil
 
 <p class="eyebrow">Demo 1</p>
 
-# Widget Store — Marketplace Checkout
+# Marketplace Checkout
 
 The checkout scenario from earlier, implemented with durable execution.
 
@@ -741,7 +755,7 @@ First up is the widget store. This is the exact checkout scenario from earlier -
 
 ---
 
-<p class="eyebrow">Demo 1 — Widget Store</p>
+<p class="eyebrow">Demo 1 — Marketplace Checkout</p>
 
 # Checkout workflow (Go)
 
@@ -773,26 +787,10 @@ Let me walk you through this code. At the top, it's just a regular Go function s
 -->
 
 ---
-layout: center
----
-
-<p class="eyebrow" style="text-align: center;">Demo 1</p>
-
-# Widget Store
-
-<p class="text-secondary" style="text-align: center; font-size: 1.1rem; margin-top: 1rem;">
-Live demo — checkout, payment, crash recovery
-</p>
-
-<!--
-Let me switch over to the live demo now. I'll walk you through the checkout process, trigger the payment webhook, and then we'll kill the server mid-dispatch and watch it recover on restart.
--->
-
----
 
 <p class="eyebrow">Demo 2</p>
 
-# Agent Inbox — AI Agent with Human Approval
+# AI Agent with Human Approval
 
 Same `Recv`/`Send` pattern, now applied to AI agents.
 
@@ -815,15 +813,17 @@ Next up, same building blocks but a completely different use case. This is an AI
 
 ---
 
-<p class="eyebrow">Demo 2 — Agent Inbox</p>
+<p class="eyebrow">Demo 2</p>
 
 # Durable agent workflow (Python)
 
-```python {1|3-4|6-8|9|11-12|14-16}{at:1, maxHeight:'380px'}
+```python {1|3-4|8-10|11|13-14|16-18}{at:1, maxHeight:'380px'}
 @DBOS.workflow()
 def durable_agent(request: AgentStartRequest):
     agent_status = AgentStatus(name=request.name, task=request.task, status="working")
     DBOS.set_event(AGENT_STATUS, agent_status)
+
+    # Do some work...
 
     # Durable wait for human approval (survives crashes)
     agent_status.status = "pending_approval"
@@ -843,24 +843,8 @@ Let's look at the Python code. The DBOS.workflow decorator at the top marks this
 -->
 
 ---
-layout: center
----
 
-<p class="eyebrow" style="text-align: center;">Demo 2</p>
-
-# Agent Inbox
-
-<p class="text-secondary" style="text-align: center; font-size: 1.1rem; margin-top: 1rem;">
-Live demo — agent task, human approval, crash recovery
-</p>
-
-<!--
-Let me show you this one in action. I'll start an agent task, we'll see it pause and wait for approval, I'll approve it, and then I'll demonstrate the crash recovery -- start an agent, kill the server while it's waiting, restart, and then approve it. The agent survives the full restart.
--->
-
----
-
-<p class="eyebrow">Demo 3 (optional)</p>
+<p class="eyebrow">Demo 3</p>
 
 # Access Management — Long-Running Approval Chain
 
@@ -881,7 +865,7 @@ If we have time, this last demo shows the most complex version of the pattern. I
 
 ---
 
-<p class="eyebrow">Demo 3 — Approval Workflow</p>
+<p class="eyebrow">Demo 3</p>
 
 # Multi-step approval (Go)
 
@@ -1103,7 +1087,13 @@ flowchart TD
 </v-clicks>
 
 <div v-click class="callout" style="margin-top: 0.75rem;">
-<p>Three families of solutions: <strong>distributed transactions</strong> (lock everything), <strong>sagas</strong> (compensate on failure), <strong>durable execution</strong> (orchestrate as a function).</p>
+<p>Three families of solutions: 
+
+<strong>- distributed transactions</strong> (lock everything), 
+
+<strong>- sagas</strong> (compensate on failure), 
+
+<strong>- durable execution</strong> (orchestrate as a function).</p>
 </div>
 
 <!--
