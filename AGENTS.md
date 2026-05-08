@@ -157,5 +157,7 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - Slidev presentations build automatically from slides/ directory during site builds to avoid committing build artifacts
 - Slidev frontmatter must NOT include `download: true` — it triggers Playwright PDF export during build, which fails in CI (Cloudflare Pages has no Chromium). Use `pnpm build:slides:pdf` locally instead.
 - Build pipeline uses build:slides script that installs dependencies and builds with correct base path
+- Node.js >= 22.12.0 required for Astro build; use `nvm use 22` since default shell may have v20.x
+- `durable-execution-talk.pdf` is manually committed via .gitignore negation (`public/talks/durable-execution/*` + `!...pdf`); regenerate with `pnpm build:slides:pdf` when slides change
 - SPA routing issues require _redirects configuration for Cloudflare Pages to handle deep links
 
