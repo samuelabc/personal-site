@@ -38,20 +38,36 @@ import { talks } from "../../data/talks";
           </p>
 
           <div class="flex flex-wrap items-center gap-2.5">
+            {talk.slidesPath ? (
+              <a
+                href={talk.slidesPath}
+                data-talk-slug={talk.slug}
+                data-track-event="talk-click"
+                data-astro-reload
+                class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-ui text-xs transition-all duration-250 ease-smooth hover:shadow-[0_4px_16px_oklch(48%_0.10_150_/_0.25)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                View Slides
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 12L12 4M12 4H5M12 4v7" />
+                </svg>
+              </a>
+            ) : (
+              <a
+                href={talk.pdfPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-talk-slug={talk.slug}
+                data-track-event="talk-click"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-ui text-xs transition-all duration-250 ease-smooth hover:shadow-[0_4px_16px_oklch(48%_0.10_150_/_0.25)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                View PDF
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 12L12 4M12 4H5M12 4v7" />
+                </svg>
+              </a>
+            )}
             <a
-              href={talk.slidesPath}
-              data-talk-slug={talk.slug}
-              data-track-event="talk-click"
-              data-astro-reload
-              class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-ui text-xs transition-all duration-250 ease-smooth hover:shadow-[0_4px_16px_oklch(48%_0.10_150_/_0.25)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              View Slides
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M4 12L12 4M12 4H5M12 4v7" />
-              </svg>
-            </a>
-            <a
-              href={`${talk.slidesPath}${talk.pdfFilename}`}
+              href={talk.pdfPath}
               target="_blank"
               rel="noopener noreferrer"
               data-talk-slug={talk.slug}

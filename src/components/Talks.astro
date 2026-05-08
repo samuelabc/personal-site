@@ -17,10 +17,10 @@ import { talks } from "../data/talks";
           </span>
           <div class="min-w-0">
             <a
-              href={talk.slidesPath}
+              href={talk.slidesPath || talk.pdfPath}
               data-talk-slug={talk.slug}
               data-track-event="talk-click"
-              data-astro-reload
+              {...(talk.slidesPath ? { "data-astro-reload": true } : { target: "_blank", rel: "noopener noreferrer" })}
               class="font-display text-base sm:text-lg font-bold italic block leading-snug no-underline text-inherit after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {talk.title}
@@ -32,7 +32,7 @@ import { talks } from "../data/talks";
         </div>
         <div class="flex items-center gap-3 shrink-0 ml-4">
           <a
-            href={`${talk.slidesPath}${talk.pdfFilename}`}
+            href={talk.pdfPath}
             target="_blank"
             rel="noopener noreferrer"
             data-talk-slug={talk.slug}
