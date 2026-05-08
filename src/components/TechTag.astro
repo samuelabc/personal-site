@@ -1,0 +1,83 @@
+---
+import * as simpleIcons from "simple-icons";
+import { techIconMap, loadRichIcons, type RichIconEntry } from "../data/tech-icons";
+
+interface Props {
+  tech: string;
+  size?: "sm" | "default";
+  variant?: "neutral" | "accent";
+}
+
+const { tech, size = "default", variant = "neutral" } = Astro.props;
+
+let iconPath: string | null = null;
+let brandHex: string | null = null;
+let richIcon: RichIconEntry | null = null;
+
+const siEntry = techIconMap[tech];
+if (siEntry) {
+  const icon = (simpleIcons as Record<string, any>)[siEntry.siKey];
+  if (icon) {
+    iconPath = icon.path;
+    brandHex = icon.hex;
+  }
+}
+
+if (!iconPath) {
+  const richIcons = await loadRichIcons();
+  const entry = richIcons[tech];
+  if (entry) {
+    richIcon = entry;
+  }
+}
+
+function adjustColor(hex: string): string {
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  if (luminance < 50) return "4a5568";
+  return hex;
+}
+
+const displayColor = brandHex ? adjustColor(brandHex) : null;
+
+const isSm = size === "sm";
+const iconSize = isSm ? 11 : 13;
+
+const baseClasses = "inline-flex items-center font-ui rounded-full";
+const sizeClasses = isSm
+  ? "text-[11px] px-2 py-0.5 gap-1"
+  : "text-xs px-3 py-1 gap-1.5";
+const variantClasses = variant === "accent"
+  ? "bg-accent/[0.07] text-accent"
+  : "bg-ink/[0.04] text-ink-muted";
+---
+
+<span class:list={[baseClasses, sizeClasses, variantClasses]}>
+  {iconPath && displayColor && (
+    <svg
+      role="img"
+      viewBox="0 0 24 24"
+      width={iconSize}
+      height={iconSize}
+      fill={`#${displayColor}`}
+      class="shrink-0 opacity-75"
+      aria-hidden="true"
+    >
+      <path d={iconPath} />
+    </svg>
+  )}
+  {richIcon && (
+    <svg
+      role="img"
+      viewBox={richIcon.viewBox}
+      width={iconSize}
+      height={iconSize}
+      class="shrink-0 opacity-80"
+      aria-hidden="true"
+      set:html={richIcon.body}
+    />
+  )}
+  {tech}
+</span>

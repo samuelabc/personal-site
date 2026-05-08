@@ -24,5 +24,9 @@
     "astro": "^6.0.2",
     "satori": "^0.26.0",
     "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "@iconify-json/logos": "^1.2.11",
+    "simple-icons": "^16.18.1"
   }
 }

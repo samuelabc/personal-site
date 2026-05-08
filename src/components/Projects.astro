@@ -1,5 +1,6 @@
 ---
 import SectionHeader from "./SectionHeader.astro";
+import TechTag from "./TechTag.astro";
 import { projects } from "../data/projects";
 
 const featured = projects.filter((p) => p.featured);
@@ -69,9 +70,7 @@ const archived = projects.filter((p) => !p.featured);
 
               <div class="flex flex-wrap gap-2 mb-6">
                 {project.techStack.map((tech) => (
-                  <span class="font-ui text-xs px-3 py-1 rounded-full bg-ink/[0.04] text-ink-muted">
-                    {tech}
-                  </span>
+                  <TechTag tech={tech} />
                 ))}
               </div>
             </div>
@@ -156,9 +155,7 @@ const archived = projects.filter((p) => !p.featured);
             <div class="flex flex-col gap-1.5 sm:shrink-0 sm:items-end">
               <div class="flex flex-wrap gap-1.5 sm:justify-end">
                 {project.techStack.map((tech) => (
-                  <span class="font-ui text-[11px] text-ink-muted bg-ink/[0.03] rounded-full px-2 py-0.5">
-                    {tech}
-                  </span>
+                  <TechTag tech={tech} size="sm" />
                 ))}
               </div>
               <div class="flex items-center gap-3">

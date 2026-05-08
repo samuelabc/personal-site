@@ -1,5 +1,6 @@
 ---
 import SectionHeader from "./SectionHeader.astro";
+import TechTag from "./TechTag.astro";
 
 const skills = [
   "Golang",
@@ -50,9 +51,7 @@ const skills = [
       <div class="flex flex-wrap gap-2 mt-6">
         {
           skills.map((skill) => (
-            <span class="font-ui text-xs px-3 py-1 rounded-full bg-accent/[0.07] text-accent">
-              {skill}
-            </span>
+            <TechTag tech={skill} variant="accent" />
           ))
         }
       </div>
