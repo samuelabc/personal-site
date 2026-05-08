@@ -13,7 +13,7 @@
 - Use `impeccable` skill when brainstorming UI/UX design.
 - Use `critique` skill when reviewing UI/UX design.
 - Use `clarity` skill for copywriting in UI/UX components.
-- Use `animate` skill for animation design.
+- Use `emil-design-eng` skill for polishing ui/ux and animation design.
 
 ## Design Context
 

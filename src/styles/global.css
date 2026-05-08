@@ -61,21 +61,48 @@ body {
 
 /* ── Hero staggered entrance ── */
 @keyframes heroFadeUp {
-  from { opacity: 0; transform: translateY(14px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 .hero-stagger {
   opacity: 0;
   animation-fill-mode: both;
-  animation-timing-function: var(--ease-emphasis);
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.hero-stagger-1 { animation: heroFadeUp 900ms 0ms both; }
-.hero-stagger-2 { animation: heroFadeUp 900ms 200ms both; }
-.hero-stagger-3 { animation: heroFadeUp 900ms 400ms both; }
-.hero-stagger-4 { animation: heroFadeUp 900ms 650ms both; }
-.hero-stagger-5 { animation: heroFadeUp 1000ms 900ms both; }
+.hero-stagger-1 { animation: heroFadeUp 600ms 0ms both; }
+.hero-stagger-2 { animation: heroFadeUp 600ms 120ms both; }
+.hero-stagger-3 { animation: heroFadeUp 600ms 300ms both; }
+.hero-stagger-4 { animation: heroFadeUp 600ms 500ms both; }
+.hero-stagger-5 { animation: heroFadeUp 700ms 700ms both; }
+
+/* ── Hero wave ── */
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(16deg); }
+  40% { transform: rotate(-4deg); }
+  60% { transform: rotate(12deg); }
+  80% { transform: rotate(-2deg); }
+}
+
+.hero-wave {
+  display: inline-block;
+  animation: wave 600ms 400ms 2 ease-in-out;
+  transform-origin: 70% 80%;
+}
+
+/* ── Hero type reveal ── */
+@keyframes typeReveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
+
+.hero-type-reveal {
+  opacity: 1;
+  clip-path: inset(0 100% 0 0);
+  animation: typeReveal 600ms 700ms both cubic-bezier(0.23, 1, 0.32, 1);
+}
 
 /* ── Scroll reveal ── */
 .reveal {
@@ -340,6 +367,15 @@ body {
   .hero-stagger {
     opacity: 1 !important;
     animation: none !important;
+  }
+
+  .hero-wave {
+    animation: none !important;
+  }
+
+  .hero-type-reveal {
+    animation: none !important;
+    clip-path: none !important;
   }
 
   .contact-word {
