@@ -1,2 +1,2 @@
 talks
-- [ ] how durable messaging works in practice
+- [x] how durable messaging works in practice

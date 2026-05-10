@@ -75,6 +75,18 @@ const formattedDate = date.toLocaleDateString("en-US", {
         });
       }
 
+      function resolveColor(cssColor) {
+        var cv = document.createElement('canvas');
+        cv.width = cv.height = 1;
+        var cx = cv.getContext('2d');
+        cx.fillStyle = cssColor;
+        cx.fillRect(0, 0, 1, 1);
+        var d = cx.getImageData(0, 0, 1, 1).data;
+        return d[3] < 255
+          ? 'rgba(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + (d[3] / 255).toFixed(2) + ')'
+          : '#' + Array.from(d).slice(0, 3).map(function(c) { return c.toString(16).padStart(2, '0'); }).join('');
+      }
+
       async function initMermaid() {
         var mermaidDivs = document.querySelectorAll('.mermaid');
         if (mermaidDivs.length === 0) return;
@@ -85,12 +97,12 @@ const formattedDate = date.toLocaleDateString("en-US", {
           startOnLoad: false,
           theme: 'base',
           themeVariables: {
-            primaryColor: 'oklch(96% 0.02 150)',
-            primaryTextColor: 'oklch(22% 0.015 160)',
-            primaryBorderColor: 'oklch(48% 0.10 150)',
-            lineColor: 'oklch(48% 0.10 150)',
-            secondaryColor: 'oklch(72% 0.08 230 / 0.15)',
-            tertiaryColor: 'oklch(78% 0.13 85 / 0.15)',
+            primaryColor: resolveColor('oklch(96% 0.02 150)'),
+            primaryTextColor: resolveColor('oklch(22% 0.015 160)'),
+            primaryBorderColor: resolveColor('oklch(48% 0.10 150)'),
+            lineColor: resolveColor('oklch(48% 0.10 150)'),
+            secondaryColor: resolveColor('oklch(72% 0.08 230 / 0.15)'),
+            tertiaryColor: resolveColor('oklch(78% 0.13 85 / 0.15)'),
             fontFamily: '"Libre Franklin", sans-serif',
             fontSize: '14px',
           },

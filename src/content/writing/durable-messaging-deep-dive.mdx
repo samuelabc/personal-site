@@ -1,0 +1,647 @@
+---
+title: "Five Ways to Make a Message Survive"
+subtitle: "The message isn't the hard part. Keeping the context alive is."
+date: 2026-05-16
+tags: ["distributed-systems", "durable-messaging", "messaging", "reliability", "architecture"]
+readTime: "22 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## The Message That Arrived But Nobody Remembered Why
+
+Your team ships an order processing service. It receives messages from a Kafka topic. Each message triggers a five-step workflow: validate the order, reserve inventory, charge payment, send confirmation, dispatch fulfillment.
+
+The message is durable. Kafka persists it to disk, replicates it across brokers. If a broker dies, the message survives. Your SRE team sleeps soundly. The message will always arrive.
+
+Then the service crashes after step 3 (charge payment) but before step 4 (send confirmation). Kafka redelivers the message. Your consumer picks it up. But the consumer has no idea that steps 1-3 already ran. It starts from scratch. The customer gets charged twice.
+
+The message survived. The context didn't.
+
+This is the gap that "durable messaging" is supposed to fill. But that phrase means five architecturally different things depending on who's saying it. A Kafka engineer, a Temporal user, an Orleans developer, and someone running Debezium with a transactional outbox all mean something different when they say "our messaging is durable."
+
+In [my previous post on durable execution](/writing/durable-execution-in-practice), I introduced durable messaging as the fourth building block -- the mechanism that lets a workflow suspend and resume. But that was one approach. This post maps all five, shows how each one works under the hood, and surfaces the second-order effects that only become visible six months into production.
+
+## The Spectrum: Durable Delivery vs. Durable Context
+
+The fundamental confusion around "durable messaging" exists because people conflate two different problems:
+
+1. **Durable delivery**: the message itself survives failures. Kafka persists to disk. RabbitMQ with persistent queues writes to Mnesia. SQS stores across availability zones. The message won't be lost.
+
+2. **Durable context**: the processing state -- what happened before this message, what step we're on, what decisions were already made -- survives failures. When processing resumes, the full context is reconstructed.
+
+Every approach to "durable messaging" sits somewhere on this spectrum. On the left: the message is just bytes that survive a crash. On the right: the entire workflow history is preserved and reconstructed.
+
+Most production failures happen because teams pick a solution from one end of the spectrum when their problem lives at the other end.
+
+<Callout type="definition">
+
+**Durable delivery**: Messages persist across broker failures (disk, replication). The consumer receives the message. What the consumer does with it -- and what it remembers about prior messages -- is entirely the consumer's problem.
+
+</Callout>
+
+<Callout type="definition">
+
+**Durable context**: The full processing state -- completed steps, intermediate results, decisions made, suspension points -- persists across failures. When a message arrives, the system reconstructs the entire history and resumes from exactly where it left off.
+
+</Callout>
+
+<Mermaid
+  caption="The durable messaging spectrum. Left: the message bytes survive. Right: the entire processing context survives. Most teams underestimate how far right their problem actually sits."
+  chart={`graph LR
+    subgraph left ["Message Survives"]
+      A["Persistent<br/>Broker"] --> B["Transactional<br/>Outbox + CDC"]
+    end
+    subgraph middle ["Message + Some State"]
+      C["Event Log<br/>(Kafka Streams)"]
+    end
+    subgraph right ["Full Context Survives"]
+      D["Virtual<br/>Actors"] --> E["Durable<br/>Execution"]
+    end
+    left -.->|"More infrastructure,<br/>less app logic"| right
+    right -.->|"More app logic,<br/>less infrastructure"| left`}
+/>
+
+<Callout type="takeaway">
+
+Every "durable messaging" solution sits on a spectrum from "the bytes survive" to "the full workflow context survives." Match your solution to where your problem actually sits on this spectrum.
+
+</Callout>
+
+## What You Probably Believe vs. What's True
+
+Before mapping the five approaches, let's surface the beliefs that steer teams into the wrong architectural bucket.
+
+| Common Belief | Reality | Second-Order Effect |
+|---|---|---|
+| Kafka gives me durable messaging | Kafka gives you durable *delivery*. Your consumer still has to manage its own state across redeliveries. | You end up building a distributed state machine out of consumer offsets and database columns, which is just a workflow engine with extra steps. |
+| The transactional outbox solves the dual-write problem | It solves atomic *publishing*. It doesn't solve message ordering, consumer idempotency, or workflow state. | You now have an outbox relay process that becomes a critical dependency. If the relay falls behind, your "real-time" events arrive with multi-second lag. |
+| Durable execution is overkill for simple messaging | If your "simple messaging" involves more than one step with side effects, you're already building durable execution informally -- just without the crash recovery. | Six months later, you have a status column, three reconciliation crons, and a dead-letter queue nobody checks. |
+| Virtual actors handle messaging automatically | Actors handle sequential per-entity messaging. Cross-entity coordination still requires explicit patterns (saga, outbox, or orchestration). | Teams assume actor isolation means no coordination problems, then discover they need cross-actor transactions that actors can't provide. |
+| Event sourcing gives you a durable message log for free | The event log is durable. But turning events into current state requires projection, and projections introduce eventual consistency that most teams don't account for. | Read models lag behind writes. Users see stale data. The team adds synchronous reads from the event store, defeating the purpose of CQRS. |
+
+<Callout type="takeaway">
+
+The word "durable" does heavy lifting in messaging conversations. Most arguments about the right approach are really disagreements about which problem needs solving.
+
+</Callout>
+
+---
+
+## The Five Approaches
+
+The rest of this post maps five architecturally distinct approaches to durable messaging. Each solves a different subset of the problem. Each has second-order effects that only surface in production.
+
+They're ordered from "message survives" (left of the spectrum) to "full context survives" (right of the spectrum). Most real systems use 2-3 of these at different layers.
+
+<Mermaid
+  caption="Five approaches to durable messaging, ordered by how much context survives beyond the message itself."
+  chart={`graph TD
+    A["1. Persistent Broker<br/>(Kafka, Pulsar, SQS)"] --> B["Message bytes on disk"]
+    C["2. Transactional Outbox<br/>(+ CDC / polling)"] --> D["Atomic state + message"]
+    E["3. Event Log as State<br/>(Kafka Streams, EventStoreDB)"] --> F["Replayable history"]
+    G["4. Virtual Actors<br/>(Orleans, Durable Objects)"] --> H["Per-entity durable state<br/>+ sequential messaging"]
+    I["5. Durable Execution<br/>(Temporal, Restate, Inngest)"] --> J["Full workflow context<br/>reconstruction"]`}
+/>
+
+## Approach 1: The Persistent Broker
+
+The simplest form of durable messaging: write the message to disk before acknowledging it. If the broker crashes, the message is still there when it comes back.
+
+Kafka writes to a partitioned, append-only log replicated across brokers. Pulsar separates brokers from storage (BookKeeper ledgers). SQS distributes messages across multiple availability zones. RabbitMQ persists to Mnesia (with quorum queues for replication since 3.8).
+
+**What you get:** the message will be delivered at least once to a consumer. With Kafka's idempotent producer (sequence numbers per partition) and transactions ([KIP-98](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=66854913)), you can get exactly-once semantics for consume-transform-produce pipelines that stay within Kafka.
+
+**What you don't get:** any awareness of what the consumer did with previous messages. The broker is a postal service. It guarantees the letter arrives. It has no idea what the recipient does after opening it.
+
+**The mechanism:** Kafka's exactly-once uses a producer ID + sequence number for deduplication within a session, plus a transaction coordinator that atomically commits offsets and output messages together. The consumer reads only committed messages (isolation level: `read_committed`). This is Atomic Broadcast within Kafka's topology.
+
+**Where it stops:** the moment your consumer writes to an external database or calls a third-party API, you're outside the transaction boundary. The Kafka transaction committed, but did the Postgres write succeed? Did the Stripe charge go through? You're back to application-level idempotency -- [Level 2 from my exactly-once post](/writing/exactly-once-is-a-lie).
+
+<Mermaid
+  caption="Kafka's durability guarantee stops at the broker boundary. The consumer's external writes are not covered by Kafka transactions."
+  chart={`sequenceDiagram
+    participant P as Producer
+    participant K as Kafka (3 brokers)
+    participant C as Consumer
+    participant DB as External DB
+    P->>K: Produce (idempotent, seq #42)
+    K-->>P: ACK (replicated)
+    Note over K: Message durable on disk
+    K->>C: Deliver (read_committed)
+    C->>DB: INSERT order
+    Note over C,DB: This write is NOT<br/>covered by Kafka's<br/>transaction
+    C->>K: Commit offset
+    Note over C: If crash between DB write<br/>and offset commit: duplicate`}
+/>
+
+<Callout type="gotcha">
+
+Kafka consumer rebalances are the sneakiest failure mode here. When a consumer group rebalances (pod autoscale, deployment, network partition), consumers reset to the last committed offset and replay all unacknowledged messages. [Depop's engineering team](https://engineering.depop.com/exploring-kafka-consumer-at-least-once-delivery-guarantees-expectations-vs-reality-36fd03e7a5e1) found their "successful processing" counts wildly exceeding actual production counts because every rebalance replayed hundreds of messages. Your consumer must be idempotent regardless of Kafka's guarantees.
+
+</Callout>
+
+<Callout type="in-practice">
+
+Kafka 4.0+ (2025) strengthened the transactional protocol with KIP-890: server-side transaction verification reduces client-server round trips and handles `CONCURRENT_TRANSACTIONS` errors with built-in retries. The producer epoch mechanism ensures each transaction includes only its intended messages.
+
+</Callout>
+
+<Details title="How Kafka transactions actually work under the hood">
+
+Kafka's exactly-once semantics combine three mechanisms:
+
+1. **Idempotent producer**: Each producer gets a unique Producer ID (PID). Every message carries a monotonically increasing sequence number per partition. The broker deduplicates based on (PID, partition, sequence). This prevents duplicates from producer retries within a single session.
+
+2. **Transactions**: A transaction coordinator tracks which partitions are part of each transaction. On commit, it writes a COMMIT marker to all involved partitions atomically. Consumers reading at `read_committed` isolation only see messages from committed transactions.
+
+3. **Consumer offset commit**: The consumer's offset is committed as part of the same transaction as the output messages. If the transaction aborts, both the output and the offset roll back, preventing the message from being "consumed" without producing output.
+
+The epoch mechanism (introduced in KIP-890, default in Kafka 4.0) prevents zombie producers: if a new producer instance starts with the same `transactional.id`, the broker fences the old producer by bumping the epoch. Any in-flight transactions from the old producer are aborted.
+
+</Details>
+
+<Callout type="takeaway">
+
+Persistent brokers solve message durability (the bytes survive). They don't solve processing durability (the context survives). The gap between these two is where most production duplicates and data inconsistencies live.
+
+</Callout>
+
+## Approach 2: The Transactional Outbox
+
+The persistent broker solves message durability but creates a new problem: the dual-write. Your service needs to update its database AND publish a message. These are two independent systems. If one succeeds and the other fails, your system is inconsistent.
+
+The transactional outbox pattern solves this by eliminating one of the two writes from the application's critical path. Instead of writing to the database and publishing to Kafka, you write to the database and an outbox table in the same transaction. A separate relay process reads the outbox and publishes to Kafka asynchronously.
+
+**Three delivery mechanisms for the relay:**
+
+1. **Polling publisher**: periodically queries the outbox table for unsent messages. Simple but introduces latency and database load.
+
+2. **CDC (Change Data Capture)**: Debezium tails the database's transaction log (WAL for Postgres, binlog for MySQL). Zero application code changes. But the CDC pipeline becomes a critical dependency.
+
+3. **LISTEN/NOTIFY (Postgres)**: The database itself notifies the relay when new outbox rows appear. Lower latency than polling, no external CDC infrastructure. But NOTIFY is lossy under connection drops.
+
+**What you get:** atomic consistency between your state change and your message intent. If the transaction commits, the message will eventually be published. If it rolls back, no message exists.
+
+**What you don't get:** immediate delivery, ordering guarantees across entities, or consumer-side state management. The outbox guarantees the message will be published. It says nothing about what the consumer does when it receives it.
+
+<Mermaid
+  caption="Transactional outbox flow. The atomicity boundary is the database transaction. Everything after that is eventually consistent."
+  chart={`sequenceDiagram
+    participant S as Service
+    participant DB as Postgres
+    participant R as Relay Process
+    participant K as Kafka
+    participant C as Consumer
+    S->>DB: BEGIN TRANSACTION
+    S->>DB: UPDATE orders SET status='paid'
+    S->>DB: INSERT INTO outbox (event, payload)
+    S->>DB: COMMIT
+    Note over DB: Both writes atomic
+    R->>DB: SELECT * FROM outbox WHERE sent=false
+    DB-->>R: [OrderPaid event]
+    R->>K: Publish OrderPaid
+    K-->>R: ACK
+    R->>DB: UPDATE outbox SET sent=true
+    K->>C: Deliver OrderPaid
+    Note over C: Consumer still needs<br/>idempotency`}
+/>
+
+<Callout type="gotcha">
+
+**The relay is now a critical dependency.** If it falls behind (GC pause, network issue, resource starvation), your "real-time" events arrive with seconds or minutes of lag. If it crashes and restarts, it may re-publish messages that were published but not marked as sent. Your consumers MUST be idempotent. The outbox doesn't give you exactly-once end-to-end.
+
+</Callout>
+
+<Callout type="gotcha">
+
+**CDC pipelines fail silently.** A [documented Debezium incident](https://medium.com/@reliabledataengineering/change-data-capture-that-doesnt-break-debezium-kafka-and-the-failures-we-fixed-f3e3c91ff331) ran for three weeks losing 40,000 product updates because null bytes in descriptions crashed the JSON converter. The connector showed "RUNNING" the entire time. Standard health checks don't catch data loss. You need reconciliation monitoring that compares source counts to downstream counts.
+
+</Callout>
+
+<Details title="CDC vs. Polling vs. LISTEN/NOTIFY: choosing a relay mechanism">
+
+**Polling publisher**
+- Latency: 100ms-5s (depending on poll interval)
+- Complexity: Low (SELECT query on a schedule)
+- Failure mode: Missed messages if polling stops; duplicate publishes on relay restart
+- Best for: Low-throughput systems, simple deployments
+
+**Debezium CDC**
+- Latency: Sub-second (tailing WAL in near real-time)
+- Complexity: High (Kafka Connect cluster, connector configuration, schema registry, offset management)
+- Failure mode: Silent data loss on malformed records, connector offset resets replaying history, Kafka producer timeouts losing events
+- Best for: High-throughput systems, legacy databases where you can't modify application code
+
+**Postgres LISTEN/NOTIFY**
+- Latency: under 10ms (push-based)
+- Complexity: Low-medium (trigger + listener process)
+- Failure mode: NOTIFY is lossy -- if the listener is disconnected, notifications are dropped. Must combine with polling as fallback.
+- Best for: Postgres-only stacks, low-medium throughput, when you want minimal infrastructure
+
+</Details>
+
+<Callout type="takeaway">
+
+The transactional outbox eliminates the dual-write problem at the publish side. But it introduces eventual consistency, relay infrastructure, and still requires consumer-side idempotency. It's a half-solution: atomic publishing without atomic consumption.
+
+</Callout>
+
+## Approach 3: The Event Log as State
+
+What if the message log IS the state? Instead of storing current state in a database and separately publishing events, you store all state changes as an immutable sequence of events. The current state is derived by replaying the log.
+
+This is event sourcing. And when you combine it with a streaming processor (Kafka Streams, Flink, EventStoreDB projections), the event log becomes both your messaging system and your state store.
+
+**The mechanism:** Every state change is an event appended to a log. To know the current state of an order, replay all `OrderCreated`, `ItemAdded`, `PaymentReceived`, `Shipped` events for that order ID. The event log is the source of truth. Read models (projections) are materialized views derived from the log.
+
+**What you get:** A complete audit trail. Time-travel debugging (replay to any point). Natural event-driven architecture (the events exist by default, not as an afterthought). No dual-write problem (the event IS the state change, not a side effect of it).
+
+**What you don't get:** Simple reads. Current state requires projection. Projections introduce eventual consistency between the write side and read side (CQRS). Schema evolution across events is non-trivial. And the event log grows without bound unless you implement snapshotting.
+
+**The key insight:** In event sourcing, "durable messaging" isn't a separate concern. Publishing events to other services is just giving them a read pointer into your log. The message IS the state mutation. There's no dual-write because there's only one write.
+
+<Mermaid
+  caption="Event sourcing: the event log is both state store and messaging channel. No dual-write because there's only one write."
+  chart={`graph LR
+    subgraph write ["Write Side"]
+      C["Command"] --> H["Handler"]
+      H --> E["Event Store<br/>(append-only log)"]
+    end
+    subgraph read ["Read Side (projections)"]
+      E --> P1["Order Summary<br/>Projection"]
+      E --> P2["Analytics<br/>Projection"]
+      E --> P3["Search Index<br/>Projection"]
+    end
+    E --> S["Other Services<br/>(subscribe to events)"]`}
+/>
+
+<Callout type="in-practice">
+
+EventStoreDB is purpose-built for this pattern: append-only event streams with built-in projections, subscriptions, and catch-up mechanics. Kafka can serve as an event store (with compacted topics for snapshots), but it lacks native projection support -- you build that with Kafka Streams or Flink.
+
+</Callout>
+
+<Callout type="gotcha">
+
+**The projection lag trap**: Your write side accepts a payment. The event is appended. The user immediately checks their order status. The read projection hasn't processed the event yet. The user sees "unpaid." They click "pay" again. Now you need idempotency on the write side to prevent double charges. Event sourcing doesn't eliminate idempotency needs -- it relocates them.
+
+</Callout>
+
+<Details title="When event sourcing is worth the complexity">
+
+Event sourcing earns its keep when you need:
+
+1. **Complete audit trail with business meaning** (regulated industries, financial systems, healthcare). Not just "what changed" but "why."
+
+2. **Temporal queries** ("what was the state of this account on March 3?"). This is trivial with event sourcing (replay to that timestamp) and nearly impossible with traditional CRUD.
+
+3. **Multiple read models from the same write** (analytics view, search index, notification trigger, reporting). Each is a projection.
+
+4. **Event-driven architecture as the primary pattern**. If you're already publishing events to 5 services, making the event log your source of truth eliminates an entire class of consistency bugs.
+
+It's NOT worth it for: simple CRUD apps, systems with few consumers, teams without event-driven experience, or when latency on reads is critical (projection lag is real).
+
+</Details>
+
+<Callout type="takeaway">
+
+Event sourcing eliminates the dual-write problem by making the event log the single source of truth. But it trades that simplicity for projection complexity, eventual consistency, and schema evolution challenges.
+
+</Callout>
+
+## Approach 4: Virtual Actors
+
+Virtual actors (Orleans Grains, Cloudflare Durable Objects, Akka Persistent Actors) solve durable messaging through a different abstraction entirely: every entity is an addressable, stateful object that processes messages sequentially.
+
+**The mechanism:** You send a message to an actor identified by a key (e.g., `order-12345`). The runtime locates the actor (activating it if it's dormant), delivers the message, and the actor processes it with access to its persisted state. One message at a time. No concurrent access to the same actor's state. No locks needed.
+
+**What you get:** Per-entity durable state without explicit database queries. Sequential message processing without distributed locks. Automatic lifecycle management (actors activate on demand, deactivate when idle). Location transparency (the runtime places actors across the cluster; callers don't need to know where).
+
+**What you don't get:** Cross-entity transactions. If "transfer $100 from Account A to Account B" requires atomicity across two actors, you need to build that coordination yourself (saga pattern, compensation logic). Actors are atomic within themselves, never across each other.
+
+**The insight for messaging:** Virtual actors turn "send a message to an entity" into a first-class operation. The message IS the invocation. The actor's state IS the durable context. There's no separate "message store" and "state store" -- they're unified in the actor's persisted state. When a message arrives, the actor already has all the context it needs.
+
+This is close to what Pat Helland describes in [Life Beyond Distributed Transactions](https://queue.acm.org/detail.cfm?id=3025012): entities as atomicity boundaries, with messaging between them as the coordination mechanism. Actors are a natural implementation of that paper's vision.
+
+<Callout type="definition">
+
+**Virtual actor**: An entity that is automatically instantiated on first message, persists its state across invocations, processes messages sequentially (no concurrency within a single actor), and deactivates when idle. "Virtual" because it doesn't need to be explicitly created or destroyed -- the runtime manages its lifecycle.
+
+</Callout>
+
+<Mermaid
+  caption="Virtual actor messaging. The actor carries its own durable context. Messages are function calls with automatic state persistence."
+  chart={`sequenceDiagram
+    participant API as API Gateway
+    participant R as Actor Runtime
+    participant A as OrderActor-12345
+    participant S as Storage
+    API->>R: Send(order-12345, "PaymentReceived")
+    R->>S: Load state (if not cached)
+    S-->>R: {status: "pending", items: [...]}
+    R->>A: Activate + deliver message
+    Note over A: Process sequentially<br/>(no concurrent access)
+    A->>A: Update state: status = "paid"
+    A->>S: Persist state
+    A->>R: Send(fulfillment-12345, "Dispatch")
+    Note over A: State survives crashes,<br/>no explicit DB queries`}
+/>
+
+<Callout type="gotcha">
+
+**The cross-entity coordination trap**: A team models their e-commerce system as actors (OrderActor, InventoryActor, PaymentActor). They assume actor isolation means clean boundaries. Then they need "reserve inventory AND charge payment atomically." Actors can't do cross-entity transactions. They end up building a saga orchestrator on top of actors -- which is just a workflow engine built from scratch.
+
+</Callout>
+
+<Details title="Orleans vs. Cloudflare Durable Objects vs. Akka Persistence">
+
+**Orleans Grains** (.NET ecosystem):
+- State persisted via pluggable providers (SQL, Cosmos, DynamoDB, Redis)
+- Grain directory uses consistent hashing with virtual synchrony
+- Timers and reminders for scheduled work
+- Best for: .NET shops needing millions of lightweight entities
+
+**Cloudflare Durable Objects** (edge computing):
+- State persisted in co-located SQLite (single-writer, no replication lag)
+- Globally unique, with strong consistency within a single object
+- WebSocket support for real-time bidirectional communication
+- Best for: Edge-native apps needing per-entity state without round-trips to a centralized database
+
+**Akka Persistent Actors** (JVM ecosystem):
+- Event-sourced by default: state recovered by replaying events
+- Cluster sharding for location-transparent routing
+- Strong ecosystem for CQRS + event sourcing patterns
+- Best for: JVM shops with event sourcing requirements
+
+</Details>
+
+<Callout type="takeaway">
+
+Virtual actors unify messaging and state: the message is the invocation, the actor is the durable context. This eliminates the gap between "message arrived" and "context available" -- but only within a single entity boundary.
+
+</Callout>
+
+## Approach 5: Durable Execution Primitives
+
+The right end of the spectrum. Here, "durable messaging" means something fundamentally different: sending or receiving a message is a checkpointed operation within a durable workflow. When the message arrives, the entire workflow context is reconstructed from its journal and execution resumes from exactly where it suspended.
+
+**The mechanism varies by framework, but the shape is the same:**
+
+**Temporal:** The workflow calls `workflow.GetSignalChannel("payment").Receive()`. The workflow suspends. The Temporal server records the suspension point in the workflow's event history. Days later, an HTTP handler calls `client.SignalWorkflow(workflowID, "payment", data)`. The server appends a SignalReceived event, creates a workflow task. A worker picks it up, replays the entire workflow from its event history (skipping completed steps), and continues from the suspension point.
+
+**Restate:** The handler creates a "Durable Promise" or "Awakeable" and suspends. Restate journals the suspension in its append-only log (Bifrost). An external system resolves the promise by ID. Restate journals the resolution and replays the handler from the journal.
+
+**Inngest:** The function calls `step.waitForEvent("payment/received")`. Inngest persists the waiting state. When a matching event arrives, Inngest resumes the function from the waiting step.
+
+**Cloudflare Workflows:** `step.waitForEvent({ name: "payment", timeout: "7d" })`. The workflow instance is serialized. When an event is sent via the Workers API, the instance is deserialized and execution continues.
+
+**AWS Step Functions:** A task uses the "Wait for Callback" integration pattern. Step Functions generates a task token, passes it to an external system. The workflow pauses (billing stops). When the external system calls `SendTaskSuccess` with the token and payload, the workflow resumes.
+
+**What makes this different from the other four approaches:** None of the other approaches reconstruct the full processing context. A Kafka consumer gets the message but has no memory of previous messages. An outbox guarantees publication but not consumption context. Event sourcing rebuilds entity state but not workflow state. Virtual actors remember per-entity state but not cross-entity workflow progress.
+
+Durable execution reconstructs EVERYTHING: every completed step, every intermediate variable, every decision branch, every prior message that was received. The workflow function resumes as if it never stopped.
+
+<Mermaid
+  caption="Durable execution messaging reconstructs the entire workflow context on resume. Not just the message -- everything that happened before it."
+  chart={`sequenceDiagram
+    participant W as Workflow
+    participant RT as Runtime (journal)
+    participant H as External System
+    W->>RT: step.waitForEvent("approval")
+    RT->>RT: Journal suspension point
+    Note over W: Zero resources consumed
+    Note over W: Days pass. Deploys happen.<br/>Servers restart.
+    H->>RT: sendEvent(workflowID, "approval", {approved: true})
+    RT->>RT: Journal event received
+    RT->>W: Reconstruct workflow
+    Note over W: Replay: skip steps 1-5
+    W->>W: Resume from step 6
+    Note over W: Full context available:<br/>all variables, all history`}
+/>
+
+<Callout type="in-practice">
+
+**Framework comparison for the suspend/resume primitive:**
+- Temporal: `workflow.GetSignalChannel().Receive()` (fire-and-forget) and `workflow.Update()` (synchronous with return value)
+- Restate: Durable Promises (within workflows) and Awakeables (from services)
+- Inngest: `step.waitForEvent("event/name", { timeout: "3d" })`
+- Cloudflare: `step.waitForEvent({ name: "event", timeout: "7d" })`
+- AWS Step Functions: Wait for Callback with task token
+- Azure Durable Functions: `context.WaitForExternalEvent("EventName")`
+
+</Callout>
+
+<Callout type="gotcha">
+
+**Inngest's documented race condition**: If the event is sent immediately after `step.waitForEvent()` is called (within milliseconds), the event can arrive before the waiting state is persisted. The function [never receives it](https://github.com/inngest/inngest/issues/1433). Inngest acknowledged this as an unfixed issue in 2025, pending a "lookback" feature. This is a fundamental challenge in event-driven waiting: the subscription must be durable before the event can be received.
+
+</Callout>
+
+<Details title="How each framework persists the suspension">
+
+**Temporal**: Event history in Cassandra/Postgres. Signal events are appended to the same history as activity completions. Replay iterates the full history on resume. Bounded by maxHistoryLength (default 50K events).
+
+**Restate**: Append-only journal in Bifrost (custom log, S3-backed snapshots). Journal entries include invocation inputs, step completions, and promise resolutions. Replay is bounded by snapshot distance.
+
+**Inngest**: Persistent event store with step state tracked per function run. Waiting state stored as function metadata. Event matching uses CEL expressions evaluated server-side.
+
+**Cloudflare Workflows**: Workflow instance state serialized to the Workflows control plane (backed by Durable Objects). [V2 architecture](https://blog.cloudflare.com/workflows-v2/) supports 50K concurrent instances with horizontal scaling.
+
+**AWS Step Functions**: State machine definition + execution history in the Step Functions service. Task tokens stored in DynamoDB for correlation. Standard Workflows retain history for 90 days.
+
+**Azure Durable Functions**: Orchestration state in Azure Storage (Table Storage for history, Blob Storage for large payloads). External events queued and replayed on orchestrator wake-up.
+
+</Details>
+
+<Callout type="takeaway">
+
+Durable execution primitives are the only approach where receiving a message reconstructs the full processing context. The message doesn't just arrive -- the entire workflow history is replayed and execution continues from the exact suspension point.
+
+</Callout>
+
+---
+
+## The Comparison Matrix
+
+Each approach solves a different subset of the durable messaging problem. Here's what each one actually guarantees -- and what it explicitly doesn't.
+
+| Dimension | Persistent Broker | Transactional Outbox | Event Log as State | Virtual Actors | Durable Execution |
+|---|---|---|---|---|---|
+| Message survives broker crash | Yes | Yes (after relay) | Yes | Yes (via actor state) | Yes (journaled) |
+| Atomic with state change | No (dual-write) | Yes (same txn) | Yes (event IS state) | Yes (actor persists) | Yes (checkpointed) |
+| Consumer has processing context | No | No | Entity state only | Per-entity state | Full workflow context |
+| Ordering guarantees | Per-partition | Per-entity (outbox order) | Per-stream | Per-actor (sequential) | Per-workflow (replayed) |
+| Cross-entity coordination | Your problem | Your problem | Via projections | Saga (your problem) | Native (child workflows) |
+| Zero-resource suspension | N/A (consumer polls) | N/A | N/A | Actor deactivates | Yes (workflow suspends) |
+
+## Second-Order Effects: What Surfaces at Month Six
+
+Every approach has consequences that only become visible after you've committed to it and run it in production for months. These aren't bugs. They're architectural gravity -- the system pulls you toward certain patterns and away from others.
+
+**Persistent Broker: You Build a State Machine Anyway**
+
+Teams start with Kafka because "we just need messaging." Six months later: the consumer has a `processing_status` column. There's a dead-letter queue for failed messages. There's a reconciliation cron that re-processes stuck items. There's a retry mechanism with exponential backoff. Congratulations: you've built a workflow engine out of Kafka consumers and database columns. The exact infrastructure durable execution replaces.
+
+**Transactional Outbox: The Relay Becomes Your Bottleneck**
+
+The outbox pattern trades the dual-write problem for a relay dependency. Under load, the relay falls behind. Your "real-time" events arrive with 3-second lag. Product asks why the notification came late. You add more relay instances, which introduces ordering challenges (two relays processing the same outbox rows). You add partition-based assignment, which is now a distributed system that needs coordination. The complexity migrated; it didn't disappear.
+
+**Event Sourcing: Projection Lag Becomes a Product Problem**
+
+The write side accepts a state change. The read projection hasn't processed it yet. The user sees stale data. They retry. You need idempotency on the write path. The team adds "read-your-writes" consistency by falling back to the event store for recent writes. But the event store wasn't designed for random reads. Performance degrades. You add a cache. The cache has its own consistency issues. You started with "events are the source of truth" and ended with three layers of read paths.
+
+**Virtual Actors: Cross-Entity Coordination Is Your Whole Job**
+
+The first few months are great. Each entity is clean, isolated, testable. Then product asks for "transfer money between accounts" (two actors) or "reserve inventory across three warehouses" (three actors). Actors can't do cross-entity transactions. You build a saga. The saga needs its own durable state. You've now built a workflow engine on top of your actor system.
+
+**Durable Execution: Workflow Versioning Becomes Your Hardest Problem**
+
+Workflows can run for days or weeks. You ship a new version that changes the step sequence. There are 2,000 in-flight workflows on the old version. Every one of them breaks on the next replay. You need versioning discipline: Temporal's `workflow.GetVersion()`, Restate's forward-compatible compensations, or blue-green worker deployments. This operational overhead is ongoing and compounds with every workflow you add.
+
+<Callout type="in-practice">
+
+**The common endpoint**: Teams that start with approaches 1-4 often converge on approach 5 (durable execution) for their complex workflows. The pattern is consistent: start simple, add retry logic, add state tracking, add reconciliation, realize you've built a workflow engine from scratch. Durable execution frameworks exist precisely because this convergence happened at enough companies that someone said "let's just build the endpoint."
+
+</Callout>
+
+<Details title="Real incident: the Kafka-to-workflow-engine migration">
+
+A fintech team started with Kafka consumers processing payment events. Over 18 months, their consumer grew to include:
+- A `payment_status` enum with 8 states
+- A polling loop checking for stuck payments every 30 seconds
+- A dead-letter queue with a manual reprocessing UI
+- An idempotency key table to prevent duplicate charges
+- A reconciliation job comparing Kafka offsets to database state
+- A retry mechanism with per-state backoff rules
+
+They estimated 200 hours of engineering time building and maintaining this infrastructure. When they migrated to Temporal, the core workflow was 47 lines of Go. The trade-off: they now needed to understand determinism constraints and workflow versioning. But those were documented, well-understood problems with tooling support. The custom infrastructure had undocumented failure modes discovered at 2am.
+
+</Details>
+
+<Callout type="takeaway">
+
+Every approach trades one set of problems for another. The persistent broker grows into a state machine. The outbox relay becomes a bottleneck. Event sourcing creates projection lag. Actors need sagas. Durable execution needs versioning discipline. The question isn't which has fewer problems -- it's which problems you'd rather have.
+
+</Callout>
+
+## The Dual-Write Problem: Why Everything Else Exists
+
+Every approach on this list exists because of one fundamental constraint: you cannot atomically write to two independent systems.
+
+You can't atomically write to Postgres AND publish to Kafka. You can't atomically call Stripe AND update your database. You can't atomically send a message AND persist its result. The moment two systems are involved, you have a gap where one can succeed and the other can fail.
+
+This is the Two Generals Problem applied to system coordination. And every "durable messaging" approach is, at its core, a strategy for living with this constraint:
+
+- **Persistent broker**: Accept the gap. Make the consumer idempotent.
+- **Transactional outbox**: Eliminate one write from the critical path. Publish asynchronously.
+- **Event sourcing**: Make the event log the single system. No second write needed.
+- **Virtual actors**: Make the actor the single system. State and messaging are unified.
+- **Durable execution**: Make the workflow runtime the coordinator. It checkpoints everything to one journal, then executes external calls with at-least-once semantics.
+
+None of them "solve" the dual-write problem in the sense of making it disappear. They each relocate it to a boundary they can manage. The outbox relocates it to the relay. Event sourcing relocates it to projections. Virtual actors relocate it to cross-entity coordination. Durable execution relocates it to external call boundaries (the idempotency key on the Stripe charge).
+
+Pat Helland saw this in 2007. His [Life Beyond Distributed Transactions](https://queue.acm.org/detail.cfm?id=3025012) paper argues that the entity (what Orleans calls a grain, what DDD calls an aggregate) is the natural atomicity boundary. Messages between entities are inherently unreliable and must be handled with idempotency and retries. Twenty years later, every framework on this list implements some version of that insight.
+
+<Callout type="definition">
+
+**Dual-write problem**: The inability to atomically update two independent systems (e.g., database + message broker) without a distributed transaction. If one write succeeds and the other fails, the systems are inconsistent. 2PC (two-phase commit) technically solves this but is impractical at scale due to availability costs and coordinator dependencies.
+
+</Callout>
+
+<Mermaid
+  caption="Every durable messaging approach is a strategy for managing the dual-write constraint. None eliminate it; each relocates it."
+  chart={`graph LR
+    A["The Dual-Write<br/>Problem"] --> B["Can't atomically write<br/>to 2 systems"]
+    B --> C["Persistent Broker:<br/>Accept it, be idempotent"]
+    B --> D["Outbox:<br/>Single-system write,<br/>async relay"]
+    B --> E["Event Sourcing:<br/>Single system<br/>(event log IS state)"]
+    B --> F["Virtual Actors:<br/>Single system<br/>(actor IS entity)"]
+    B --> G["Durable Execution:<br/>Single journal,<br/>at-least-once externals"]`}
+/>
+
+<Callout type="takeaway">
+
+The dual-write problem is the root cause that made all five approaches necessary. Each approach relocates the atomicity boundary rather than eliminating it. Understanding where each approach puts that boundary tells you where your idempotency logic needs to live.
+
+</Callout>
+
+## When to Reach for What
+
+These five approaches compose. Most production systems use 2-3 at different layers. The skill is matching each layer's needs to the right approach.
+
+**Start with the question: what needs to survive a failure?**
+
+If it's just the message bytes, use a persistent broker. If it's the atomicity of "state change + message," use a transactional outbox. If it's the complete history of state changes, use event sourcing. If it's per-entity state across messages, use virtual actors. If it's the full cross-service workflow context, use durable execution.
+
+**A realistic system uses multiple layers.** A food delivery platform might use:
+- Kafka (persistent broker) for distributing order events to independent services (notifications, analytics, search index)
+- Transactional outbox on the order service for atomic order creation + event publishing
+- Durable execution (Temporal) for the multi-step fulfillment workflow (reserve restaurant, charge customer, assign driver, track delivery)
+- Virtual actors (Cloudflare Durable Objects) for real-time driver location tracking (per-driver stateful entity)
+
+Four approaches, one platform. Each at the layer where it earns its complexity.
+
+<Mermaid
+  caption="Decision tree: what needs to survive determines which approach fits. Most systems use 2-3 at different layers."
+  chart={`graph LR
+    A{"What needs<br/>to survive?"} -->|"Message bytes"| B["Persistent Broker<br/>(Kafka, SQS)"]
+    A -->|"State + message<br/>atomicity"| C["Transactional Outbox<br/>(+ CDC or polling)"]
+    A -->|"Complete change<br/>history"| D["Event Sourcing<br/>(EventStoreDB, Kafka)"]
+    A -->|"Per-entity state<br/>across messages"| E["Virtual Actors<br/>(Orleans, Durable Objects)"]
+    A -->|"Full workflow<br/>context"| F["Durable Execution<br/>(Temporal, Restate)"]`}
+/>
+
+<Callout type="in-practice">
+
+**The composition pattern that works**: Use a persistent broker (Kafka) for distributing events to independent consumers. Use durable execution for any workflow that involves "wait for X then do Y." Use virtual actors for high-frequency per-entity state (real-time counters, presence, sessions). Use the outbox pattern where you need atomic state + publish but don't need workflow orchestration. You don't pick one; you layer them.
+
+</Callout>
+
+<Callout type="gotcha">
+
+**The anti-pattern**: using durable execution for everything, including simple fire-and-forget messages. A notification that doesn't need acknowledgment or retry? That's a Kafka message (or even an HTTP POST with a retry). Over-engineering with workflows where a simple consumer suffices creates unnecessary operational overhead and versioning surface area.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Match the approach to what needs to survive. Message bytes: broker. Atomic publish: outbox. History: event sourcing. Entity state: actors. Workflow context: durable execution. Most real systems compose 2-3 of these at different layers.
+
+</Callout>
+
+## The Cheat Sheet
+
+- **"Durable messaging" means five different things.** A persistent broker (message survives), a transactional outbox (publish is atomic with state), an event log as state (history IS the messaging), virtual actors (entity state + messages unified), and durable execution (full workflow context reconstructed). Know which one you're talking about.
+
+- **The spectrum runs from "bytes survive" to "context survives."** Most production failures happen because teams pick a solution from the left (broker durability) when their problem lives on the right (workflow context preservation).
+
+- **Every approach relocates the dual-write problem, none eliminate it.** The outbox moves it to the relay. Event sourcing moves it to projections. Actors move it to cross-entity coordination. Durable execution moves it to external call boundaries. Your idempotency logic lives wherever the boundary landed.
+
+- **Second-order effects matter more than first-order features.** The persistent broker grows into a state machine. The outbox relay becomes a bottleneck. Event sourcing creates projection lag. Actors need sagas. Durable execution needs versioning discipline. Choose based on which second-order effects you can live with.
+
+- **Real systems compose 2-3 approaches at different layers.** Kafka for distribution, outbox for atomic publish, durable execution for complex workflows. The skill is knowing where one layer ends and the next begins.
+
+### Further Reading
+
+**Start here:**
+
+- [Life Beyond Distributed Transactions](https://queue.acm.org/detail.cfm?id=3025012) by Pat Helland (ACM Queue, 2016). The paper that predicted all five approaches. Entities as atomicity boundaries, messaging between them as the coordination mechanism. Dense but foundational.
+
+- [Understanding the Dual-Write Problem](https://www.confluent.io/blog/dual-write-problem) by Confluent. The clearest explanation of why you can't atomically write to two systems, and why the outbox pattern exists.
+
+**Go deeper:**
+
+- [Idempotence Is Not a Medical Condition](https://queue.acm.org/detail.cfm?id=2187821) by Pat Helland (ACM Queue, 2012). Why durable messaging requires durable state. The intellectual foundation for all five approaches.
+
+- [KIP-98: Exactly Once Delivery and Transactional Messaging](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=66854913) by Apache Kafka. The design document for Kafka's transactional protocol. Shows exactly where their guarantee starts and stops.
+
+- [Building a Modern Durable Execution Engine from First Principles](https://restate.dev/blog/building-a-modern-durable-execution-engine-from-first-principles) by Restate. How to build journal-based durable execution from scratch. Excellent for understanding approach 5 at the implementation level.
+
+- [Change Data Capture That Doesn't Break](https://medium.com/@reliabledataengineering/change-data-capture-that-doesnt-break-debezium-kafka-and-the-failures-we-fixed-f3e3c91ff331) by Reliable Data Engineering. Real production failures in Debezium CDC pipelines. Reading this before committing to CDC-based outbox relay could save you a 3-week silent data loss incident.
+
+- [Saga Orchestration vs Choreography](https://temporal.io/blog/to-choreograph-or-orchestrate-your-saga-that-is-the-question) by Temporal. When centralized orchestration beats distributed choreography, and when it doesn't.
+
+- [Durable Execution: The Missing Layer in Your AI Agent Stack](https://reptile.haus/journal/durable-execution-ai-agents-temporal-restate-inngest-2026/) by Reptile Haus (2026). How AI agent workloads are driving the adoption of approach 5 as the default for any non-trivial async work.
