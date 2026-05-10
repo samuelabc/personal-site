@@ -1,0 +1,61 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getCollection } from "astro:content";
+
+const posts = (await getCollection("writing", ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+
+<Base
+  title="Writing — Samuel Thien"
+  description="Technical writing on distributed systems, backend architecture, and things I've learned building software."
+  canonicalPath="/writing"
+>
+  <section class="py-12 sm:py-16">
+    <div class="mb-10 sm:mb-14">
+      <a
+        href="/"
+        class="inline-flex items-center gap-1.5 font-ui text-xs text-ink-muted no-underline hover:text-accent transition-colors duration-250 mb-6 group"
+      >
+        <span class="transition-transform duration-250 group-hover:-translate-x-0.5">&larr;</span>
+        Home
+      </a>
+
+      <h1 class="font-display text-2xl sm:text-3xl font-bold tracking-[-0.01em] mb-2">
+        Writing
+      </h1>
+      <p class="text-[15px] sm:text-base text-ink-soft leading-relaxed max-w-[600px]">
+        Technical posts on distributed systems, backend patterns, and things that
+        broke in production so you don't have to find out the hard way.
+      </p>
+    </div>
+
+    {posts.length === 0 ? (
+      <p class="text-ink-muted font-ui text-sm">No posts yet. Check back soon.</p>
+    ) : (
+      <div class="flex flex-col gap-1.5">
+        {posts.map((post) => (
+          <a
+            href={`/writing/${post.id}`}
+            class="group flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-6 rounded-xl border border-rule px-5 sm:px-7 py-5 bg-bg-card transition-all duration-400 ease-smooth hover:shadow-[0_4px_20px_oklch(0%_0_0_/_0.05)] hover:border-accent/30 no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <span class="font-ui text-xs text-ink-muted shrink-0 sm:min-w-[90px]">
+              {post.data.date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+            </span>
+            <div class="flex-1">
+              <span class="font-display text-base sm:text-lg font-bold italic block leading-snug group-hover:text-accent transition-colors duration-250">
+                {post.data.title}
+              </span>
+              <span class="font-body text-sm text-ink-soft mt-1 block leading-snug">
+                {post.data.subtitle}
+              </span>
+            </div>
+            <span class="font-ui text-xs text-ink-muted shrink-0 hidden sm:block">
+              {post.data.readTime}
+            </span>
+          </a>
+        ))}
+      </div>
+    )}
+  </section>
+</Base>

@@ -1,5 +1,6 @@
 ## Important!!!
 
+- Always ask me questions if you are not sure about the answer or you need clarification on something.
 - Whenever you are going to stop the current taskflow to ask a question, always use the AskQuestion tool.
 - Use the AskQuestion tool for any interaction requiring user input like choosing between options, confirming a proposed action, or clarifying an ambiguous request.
 - When spinning up subagents, use opus 4.6 model, only if this model is not available, then use gpt 5.3 codex model or composer-2 model.
@@ -7,6 +8,7 @@
 ## General
 
 - When conductng e2e tests, take screenshots of the browser and save them to the `screenshots` directory with clear naming as proof and use for documentation.
+    - when validating slidev slides, please be aware that a slide can have multiple steps, so you need to click through each step to validate the entire slide.
 - When conducting code review, use a different model e.g. gpt 5.3 codex model to review the code.
 - Use `humanizer` skill for general copywriting and content creation.
 - Use `frontend-skill` skill for UI/UX design.
@@ -14,6 +16,10 @@
 - Use `critique` skill when reviewing UI/UX design.
 - Use `clarity` skill for copywriting in UI/UX components.
 - Use `emil-design-eng` skill for polishing ui/ux and animation design.
+- Use `presentation-content` skill for crafting the content of a slidev presentation.
+- Use `slidev-slide-craft` skill for converting content outlines into polished Slidev slides.
+- Use `technical-blog-content` skill for writing technical blog posts (content planning, outlines, narrative structure).
+- Use `technical-blog-craft` skill for implementing blog posts as Astro MDX (component usage, styling, rendering).
 
 ## Design Context
 
@@ -149,10 +155,10 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - Tech stack: Astro framework, pnpm package manager, Tailwind CSS for styling
 - Deployed on Cloudflare Pages, domain is samuelthien.site
 - PostHog analytics integrated with centralized event names and a shared capture utility
-- Site sections: About, Selected Work (projects), Bookshelf, Experience (work history), Talks
+- Site sections: About, Selected Work (projects), Bookshelf, Experience (work history), Talks, Writing (technical blog)
 - Key projects on the site: ReplyHero (cofounded, auto-reply SaaS), YoTalent (AI hackathon champion at Mercedes), AI PR Review (VSCode extension), datetime-helper
 - Bookshelf page features: "The Beginning of Infinity" (general), "Designing Data-Intensive Applications" and "Building Evolutionary Architecture" (technical)
-- Talks section serves Slidev presentations as static HTML from public/talks/; talk data in src/data/talks.ts; links need `data-astro-reload` to bypass Astro View Transitions (ClientRouter); `serveSpaFallback` Vite plugin in astro.config.mjs resolves directory URLs to index.html in dev
+- Talks section: talk data in src/data/talks.ts with `pdfPath` (required) + optional `slidesPath` supporting both interactive Slidev and PDF-only talks; Slidev talks served as static HTML from public/talks/; links need `data-astro-reload` to bypass Astro View Transitions (ClientRouter); `serveSpaFallback` Vite plugin in astro.config.mjs resolves directory URLs to index.html in dev
 - Resume PDF at public/samuel-thien-resume.pdf, linked from Hero section as secondary CTA with PostHog tracking
 - Slidev presentations build automatically from slides/ directory during site builds to avoid committing build artifacts
 - Slidev frontmatter must NOT include `download: true` — it triggers Playwright PDF export during build, which fails in CI (Cloudflare Pages has no Chromium). Use `pnpm build:slides:pdf` locally instead.
@@ -160,4 +166,10 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - Node.js >= 22.12.0 required for Astro build; use `nvm use 22` since default shell may have v20.x
 - `durable-execution-talk.pdf` is manually committed via .gitignore negation (`public/talks/durable-execution/*` + `!...pdf`); regenerate with `pnpm build:slides:pdf` when slides change
 - SPA routing issues require _redirects configuration for Cloudflare Pages to handle deep links
+- `public/_headers` configures Cloudflare Pages Content-Type headers (e.g. `application/xml` for sitemap files)
+- Technology tags use `@iconify-json/logos` for brand icons with text-only fallback for unlisted techs; no custom SVG icon maps
+- Writing section: MDX blog posts in src/content/writing/, rendered via BlogPost.astro layout with hand-written .prose CSS (not @tailwindcss/typography), max-width 720px centered
+- Blog components: Callout (4 types: definition/takeaway/gotcha/in-practice with icons), Mermaid (chart prop, not slot, rendered via CDN), Details (open by default)
+- Blog design rules: no side-stripe borders (banned by impeccable), full borders + background tints on callouts/blockquotes, OKLCH colors, code captions connect to code blocks via shared dark background
+- Mermaid in MDX must use chart prop (`<Mermaid chart={`...`} />`) because MDX wraps slot content in `<p>` tags which breaks mermaid parsing
 

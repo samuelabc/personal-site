@@ -1,0 +1,110 @@
+---
+import Base from "./Base.astro";
+
+interface Props {
+  title: string;
+  subtitle: string;
+  date: Date;
+  tags: string[];
+  readTime: string;
+}
+
+const { title, subtitle, date, tags, readTime } = Astro.props;
+
+const formattedDate = date.toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+---
+
+<Base
+  title={`${title} — Samuel Thien`}
+  description={subtitle}
+  canonicalPath={Astro.url.pathname}
+  ogType="article"
+>
+  <article class="py-12 sm:py-16">
+    <header class="mb-10 sm:mb-14 max-w-[720px] mx-auto">
+      <a
+        href="/writing"
+        class="inline-flex items-center gap-1.5 font-ui text-xs text-ink-muted no-underline hover:text-accent transition-colors duration-250 mb-6 group"
+      >
+        <span class="transition-transform duration-250 group-hover:-translate-x-0.5">&larr;</span>
+        Writing
+      </a>
+
+      <h1 class="font-display text-[1.75rem] sm:text-[2.25rem] font-bold leading-[1.15] tracking-[-0.015em] mb-3">
+        {title}
+      </h1>
+      <p class="text-[17px] sm:text-lg text-ink-soft leading-snug italic">
+        {subtitle}
+      </p>
+
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-5 font-ui text-xs text-ink-muted">
+        <time datetime={date.toISOString()}>{formattedDate}</time>
+        <span class="hidden sm:inline">&middot;</span>
+        <span>{readTime} read</span>
+      </div>
+
+      {tags.length > 0 && (
+        <div class="flex flex-wrap gap-1.5 mt-4">
+          {tags.map((tag) => (
+            <span class="font-ui text-[11px] text-ink-muted bg-ink/[0.04] px-2 py-0.5 rounded">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </header>
+
+    <div class="prose">
+      <slot />
+    </div>
+  </article>
+
+  <script is:inline>
+    (function() {
+      function wrapTables() {
+        document.querySelectorAll('.prose table').forEach(function(table) {
+          if (table.parentElement.classList.contains('table-wrapper')) return;
+          var wrapper = document.createElement('div');
+          wrapper.className = 'table-wrapper';
+          table.parentNode.insertBefore(wrapper, table);
+          wrapper.appendChild(table);
+        });
+      }
+
+      async function initMermaid() {
+        var mermaidDivs = document.querySelectorAll('.mermaid');
+        if (mermaidDivs.length === 0) return;
+
+        var mod = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
+        var mermaid = mod.default;
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'base',
+          themeVariables: {
+            primaryColor: 'oklch(96% 0.02 150)',
+            primaryTextColor: 'oklch(22% 0.015 160)',
+            primaryBorderColor: 'oklch(48% 0.10 150)',
+            lineColor: 'oklch(48% 0.10 150)',
+            secondaryColor: 'oklch(72% 0.08 230 / 0.15)',
+            tertiaryColor: 'oklch(78% 0.13 85 / 0.15)',
+            fontFamily: '"Libre Franklin", sans-serif',
+            fontSize: '14px',
+          },
+        });
+        await mermaid.run({ nodes: mermaidDivs });
+      }
+
+      function init() {
+        wrapTables();
+        initMermaid();
+      }
+
+      init();
+      document.addEventListener('astro:page-load', init);
+    })();
+  </script>
+</Base>

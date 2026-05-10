@@ -346,6 +346,338 @@ body {
   border-radius: 8px;
 }
 
+/* ── Blog prose ── */
+.prose {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: var(--color-ink);
+}
+
+.prose h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-ink);
+}
+
+.prose h3 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-ink);
+}
+
+.prose p {
+  margin-bottom: 1.25rem;
+}
+
+.prose a {
+  color: var(--color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color 200ms;
+}
+
+.prose a:hover {
+  color: var(--color-ink);
+}
+
+.prose strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose code {
+  font-size: 0.875em;
+  background: oklch(0% 0 0 / 0.04);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+.prose pre {
+  background: oklch(22% 0.015 160);
+  color: oklch(92% 0.005 90);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.prose pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.prose blockquote {
+  border: 1px solid oklch(48% 0.10 150 / 0.15);
+  padding: 1rem 1.375rem;
+  margin: 1.75rem 0;
+  background: oklch(48% 0.10 150 / 0.04);
+  border-radius: 10px;
+  font-style: italic;
+}
+
+.prose blockquote p {
+  margin-bottom: 0.5rem;
+}
+
+.prose blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.prose ul, .prose ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.prose li {
+  margin-bottom: 0.35rem;
+}
+
+.prose .table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.75rem 0;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.75rem 0;
+  font-size: 0.9375rem;
+  min-width: 480px;
+}
+
+.prose .table-wrapper table {
+  margin: 0;
+}
+
+.prose th {
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 2px solid var(--color-rule);
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.prose td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--color-rule);
+  vertical-align: top;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--color-rule);
+  margin: 3rem 0;
+}
+
+.prose figure {
+  margin: 1.5rem 0;
+}
+
+.prose figcaption {
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+@media (min-width: 640px) {
+  .prose {
+    font-size: 1.125rem;
+  }
+
+  .prose h2 {
+    font-size: 1.625rem;
+    margin-top: 3rem;
+  }
+}
+
+/* ── Blog callout boxes ── */
+.callout {
+  border-radius: 10px;
+  padding: 1.125rem 1.375rem;
+  margin: 1.75rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  border: 1px solid;
+}
+
+.callout p {
+  margin-bottom: 0.5rem;
+}
+
+.callout p:last-child {
+  margin-bottom: 0;
+}
+
+.callout-definition {
+  background: oklch(48% 0.10 150 / 0.05);
+  border-color: oklch(48% 0.10 150 / 0.18);
+}
+
+.callout-takeaway {
+  background: oklch(72% 0.08 230 / 0.07);
+  border-color: oklch(72% 0.08 230 / 0.2);
+}
+
+.callout-gotcha {
+  background: oklch(78% 0.13 85 / 0.09);
+  border-color: oklch(78% 0.13 85 / 0.25);
+}
+
+.callout-in-practice {
+  background: oklch(82% 0.06 350 / 0.07);
+  border-color: oklch(82% 0.06 350 / 0.22);
+}
+
+.callout-label {
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.callout-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.callout-definition .callout-label { color: var(--color-accent); }
+.callout-takeaway .callout-label { color: oklch(52% 0.12 230); }
+.callout-gotcha .callout-label { color: oklch(55% 0.13 85); }
+.callout-in-practice .callout-label { color: oklch(55% 0.08 350); }
+
+/* ── Blog collapsible ── */
+.blog-details {
+  margin: 1.5rem 0;
+  border: 1px solid var(--color-rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.blog-details summary {
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  color: var(--color-ink-soft);
+  background: oklch(0% 0 0 / 0.015);
+  transition: color 200ms;
+  list-style: none;
+}
+
+.blog-details summary::-webkit-details-marker { display: none; }
+
+.blog-details summary::before {
+  content: "▸ ";
+  display: inline;
+  transition: transform 200ms;
+}
+
+.blog-details[open] summary::before {
+  content: "▾ ";
+}
+
+.blog-details summary:hover {
+  color: var(--color-accent);
+}
+
+.blog-details .details-content {
+  padding: 1rem 1.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  border-top: 1px solid var(--color-rule);
+}
+
+/* ── Mermaid diagram container ── */
+.mermaid-wrapper {
+  margin: 1.75rem 0;
+  padding: 1.5rem 1.25rem 1rem;
+  background: oklch(98% 0.004 150 / 0.5);
+  border: 1px solid oklch(88% 0.008 150 / 0.6);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.mermaid-wrapper .mermaid {
+  display: flex;
+  justify-content: center;
+  background: none;
+  color: var(--color-ink);
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  font-size: inherit;
+  line-height: inherit;
+  overflow: visible;
+  white-space: pre-wrap;
+}
+
+.mermaid-wrapper .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-caption {
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  font-style: italic;
+  margin-top: 0.75rem;
+  text-align: center;
+  padding-top: 0.5rem;
+  border-top: 1px solid oklch(88% 0.008 150 / 0.4);
+}
+
+/* ── Code block caption ── */
+.prose .code-caption {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: oklch(82% 0.005 90);
+  background: oklch(22% 0.015 160);
+  padding: 0.625rem 1.5rem 0.375rem;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid oklch(30% 0.01 160);
+  margin-bottom: 0;
+}
+
+.prose .code-caption + pre {
+  margin-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
 /* ── View transition tuning ── */
 ::view-transition-group(*) {
   animation-duration: 0.5s;

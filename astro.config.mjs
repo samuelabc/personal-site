@@ -1,6 +1,7 @@
 import { defineConfig } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 import sitemap from "@astrojs/sitemap";
+import mdx from "@astrojs/mdx";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -23,7 +24,7 @@ function serveSpaFallback() {
 
 export default defineConfig({
   site: "https://samuelthien.site",
-  integrations: [sitemap()],
+  integrations: [sitemap(), mdx()],
   vite: {
     plugins: [tailwindcss(), serveSpaFallback()],
   },

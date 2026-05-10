@@ -1,0 +1,313 @@
+---
+title: "Exactly-Once Is a Lie (Sort Of)"
+subtitle: "Why two smart people can disagree about whether exactly-once is possible — and both be right"
+date: 2026-05-10
+tags: ["distributed-systems", "idempotency", "reliability", "messaging"]
+readTime: "14 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## The Friday Deploy That Charged a Customer Twice
+
+You ship a payment service. It handles charges, refunds, the usual. Staging looked great. You deploy on Friday afternoon because you're feeling bold.
+
+A network blip causes a timeout between your API and the payment provider. Your retry logic kicks in. The customer gets charged twice. Your Slack fills up with the kind of messages that start with "Hey, so..."
+
+The post-mortem lands on a familiar recommendation: "We need exactly-once delivery." Your tech lead nods. Someone opens a Jira ticket. And nobody in the room agrees on what "exactly-once" actually means.
+
+Here's the thing: there's a [famous blog post](https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/) that says exactly-once delivery is mathematically impossible. There's also a [major open-source project](https://medium.com/@jaykreps/exactly-once-support-in-apache-kafka-55e1fdd0a35f) that shipped it as a feature. They can't both be right. Can they?
+
+They can. They're talking about different things. That's what this post is about.
+
+## What You Probably Believe vs. What's Actually True
+
+Before we untangle this, let's surface the beliefs that get people into trouble. These aren't dumb beliefs. They're reasonable intuitions that happen to be wrong in ways that matter at 3am.
+
+<Callout type="definition">
+
+**Exactly-once delivery**: a message crosses the network and arrives at the receiver exactly one time. No duplicates, no losses. At the *transport* level, this is what the [Two Generals Problem](https://en.wikipedia.org/wiki/Two_Generals%27_Problem) proves impossible.
+
+</Callout>
+
+<Callout type="definition">
+
+**Effectively-once processing**: a message may be *delivered* more than once over the wire, but its *effect* is applied only once, because the receiver is idempotent. This is what production systems actually achieve.
+
+</Callout>
+
+<Callout type="definition">
+
+**Exactly-once semantics**: a system-level guarantee that the observable outcome of processing messages is indistinguishable from each message being processed exactly once. This is what Kafka, Pub/Sub, and SQS FIFO actually provide, within their ecosystem boundaries.
+
+</Callout>
+
+| Common Belief | Reality | Why It Matters |
+|---|---|---|
+| "Exactly-once delivery" means each message arrives once | No network protocol can guarantee this (Two Generals Problem). What systems provide is deduplication on top of at-least-once delivery. | You'll design for a transport guarantee you don't have |
+| "Exactly-once is impossible" — full stop | Exactly-once *delivery* over unreliable networks is impossible. Exactly-once *semantics* via Atomic Broadcast is well-studied and provably achievable. | You'll reject tools that actually solve your problem |
+| Idempotency just means "retry-safe" | It also requires deterministic side effects and race-condition-free dedup storage | Your payment charges twice under concurrent retries |
+| Kafka/SQS/Pub/Sub give you exactly-once for free | Their guarantees have strict scope boundaries (within Kafka, within a region, within a 5-min window) | You'll trust a guarantee that stops at the system boundary your request crosses |
+
+<Callout type="takeaway">
+
+The gap between "exactly-once" marketing and production reality is a definitional problem. Most arguments about whether it's possible are people talking past each other.
+
+</Callout>
+
+## The Three Levels Nobody Distinguishes
+
+The reason smart people keep arguing about this is that "exactly-once" means three different things depending on which layer of the stack you're standing on. Almost every argument about whether it's possible is two people talking about different layers.
+
+<Mermaid
+  caption="The three levels of 'exactly-once.' Most arguments happen because people conflate Level 1 and Level 3."
+  chart={`graph LR
+    L1["Level 1:\nTransport Delivery"] -->|"Impossible"| A1["At-least-once\n+ deduplication"]
+    L2["Level 2:\nApplication Processing"] -->|"Achievable"| A2["Idempotency keys,\noptimistic concurrency"]
+    L3["Level 3:\nSystem Semantics"] -->|"Achievable"| A3["Kafka transactions,\nSQS FIFO, Pub/Sub"]
+    A3 -->|"Within boundary only"| L2`}
+/>
+
+**Level 1: Transport delivery.** Can you send a message over a network and guarantee it arrives exactly once? No. The Two Generals Problem isn't a design complexity, it's an impossibility result. You send a message, you get an ack, but did the ack get lost? You can't know without another ack, and that creates an infinite regress. Tyler Treat's [widely-shared post](https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/) puts it clearly: "Within the context of a distributed system, you cannot have exactly-once message delivery."
+
+**Level 2: Application processing.** Can you ensure that a message's *effect* is applied only once, even if the message arrives multiple times? Yes. This is what idempotency gives you. `SET x = 5` is idempotent (run it 10 times, x is still 5). `INCREMENT x` is not. The hard part is making non-idempotent operations behave as if they were.
+
+**Level 3: System semantics.** Can you build a system where the observable outcome is *as if* each message was processed exactly once? Also yes. This is [Atomic Broadcast](https://ieeexplore.ieee.org/document/5958223) (or Total Order Broadcast), and it's equivalent to consensus. Paxos, Raft, Zab all solve it. This is what Kafka means by "exactly-once semantics." Jay Kreps' [response to the skeptics](https://medium.com/@jaykreps/exactly-once-support-in-apache-kafka-55e1fdd0a35f) is worth reading in full: "If you don't believe consensus is possible, then you also don't believe Kafka is possible."
+
+The catch: Level 3 only works *within* the system boundary. Kafka can guarantee exactly-once semantics for a consume-transform-produce pipeline that stays inside Kafka. The moment you write to an external database or call a third-party API, you're back to Level 2.
+
+<Callout type="gotcha">
+
+The FLP impossibility result is often cited as proof that exactly-once is impossible. But FLP actually *assumes* reliable links between correct processes. It proves something else: that deterministic consensus can't guarantee termination in a fully asynchronous system. With timeouts or randomization, consensus is solvable. Kreps makes this point well.
+
+</Callout>
+
+<Details title="The FLP result and why it's misapplied here">
+
+The FLP impossibility result (Fischer, Lynch, Paterson, 1985) proves that no deterministic consensus protocol can guarantee termination in a fully asynchronous system where even one process can fail. This is real and important.
+
+But it's often cited as evidence that exactly-once delivery is impossible, which is a category error. FLP *assumes* reliable message delivery between correct processes. It proves that consensus (and by extension, Atomic Broadcast) can't guarantee *termination* in the strictly asynchronous model. Practical systems use timeouts and failure detectors to escape this constraint. Paxos, Raft, and Zab all work this way.
+
+The Two Generals Problem is the actual impossibility result for delivery. FLP is about consensus liveness, not message delivery.
+
+</Details>
+
+<Callout type="takeaway">
+
+There are three distinct levels of "exactly-once." Transport delivery is impossible. Application processing is achievable with idempotency. System semantics is achievable with Atomic Broadcast, but only within the system's boundary. Outside that boundary, you're back to idempotency.
+
+</Callout>
+
+---
+
+*If you've followed this far, you have the framework that resolves most "is exactly-once possible?" debates. The answer is: depends which level you're asking about. The rest of this post is about Level 2, the one you actually control.*
+
+---
+
+## Idempotency: The Actual Engineering
+
+Formally: *f(f(x)) = f(x)*. An operation that produces the same result whether you execute it once or a hundred times. Some operations are naturally idempotent. `DELETE FROM users WHERE id = 42`: run it twice, same outcome. `UPDATE accounts SET balance = 500 WHERE id = 1`: same. But `UPDATE accounts SET balance = balance - 50 WHERE id = 1` is not. Run it twice, and you've deducted 100.
+
+The problem is making non-idempotent operations (charges, transfers, inventory decrements) behave as if they were. Three strategies, for different situations.
+
+<Mermaid
+  caption="Decision tree for choosing an idempotency strategy based on your constraints."
+  chart={`graph LR
+    A{"Naturally\nidempotent?"} -->|Yes| B["No extra\nwork needed"]
+    A -->|No| C{"Control\nthe client?"}
+    C -->|Yes| D["Idempotency\nkeys"]
+    C -->|No| E{"Single or\ncross-system?"}
+    E -->|Single| F["Optimistic\nconcurrency"]
+    E -->|Cross-system| G["Transactional\noutbox"]`}
+/>
+
+**Strategy 1: Natural idempotency.** Rewrite the operation to be inherently idempotent. Instead of "increment counter," "set counter to 7 if current version is 6." This is optimistic concurrency control, and it works when you control both sides of the operation.
+
+**Strategy 2: Idempotency keys.** The client generates a unique key for each logical request and sends it with every retry. The server stores the key and its result. On duplicate, return the cached result. Stripe popularized this pattern: every mutating API call accepts an `Idempotency-Key` header. Brandur Leach's [implementation guide](https://brandur.org/idempotency-keys) is the canonical reference.
+
+**Strategy 3: Transactional outbox.** For operations that span multiple systems (write to DB, publish to queue, call external API), use a transactional outbox pattern. Write the intent to your database in the same transaction as your state change, then process the outbox asynchronously with at-least-once delivery and idempotent consumers.
+
+<Callout type="gotcha">
+
+DELETE is idempotent (deleting a nonexistent row is a no-op), but it's not *safe*, because it has side effects. Don't confuse idempotent with safe. HTTP GET is both safe and idempotent. HTTP DELETE is idempotent but not safe. HTTP POST is neither.
+
+</Callout>
+
+<Callout type="in-practice">
+
+At Stripe, idempotency keys expire after 24 hours. They're not a permanent archive, just a mechanism for near-term correctness during the retry window. If you need longer deduplication, you need something else.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Idempotency keys are the most common solution, but they're not the only one. Choose based on whether you control the client, whether the operation is naturally rewritable, and whether it crosses system boundaries.
+
+</Callout>
+
+## Idempotency Keys in Practice
+
+The client generates a key (a UUID or deterministic hash of the request parameters). The server checks if it's seen that key before. If yes, return the cached response. If no, process the request and store the result.
+
+The tricky part isn't the happy path. It's handling the race condition when two concurrent retries arrive with the same key before the first one finishes processing.
+
+<p class="code-caption">Minimal idempotency key middleware (Express/Node.js)</p>
+
+```typescript
+async function idempotencyMiddleware(req, res, next) {
+  const key = req.headers['idempotency-key'];
+  if (!key) return next();
+
+  const existing = await db.query(
+    `INSERT INTO idempotency_keys (key, status, created_at)
+     VALUES ($1, 'processing', NOW())
+     ON CONFLICT (key) DO NOTHING
+     RETURNING *`,
+    [key]
+  );
+
+  if (existing.rowCount === 0) {
+    const cached = await db.query(
+      'SELECT response_code, response_body FROM idempotency_keys WHERE key = $1',
+      [key]
+    );
+    if (cached.rows[0]?.status === 'completed') {
+      return res.status(cached.rows[0].response_code)
+        .json(JSON.parse(cached.rows[0].response_body));
+    }
+    return res.status(409).json({ error: 'Request is still being processed' });
+  }
+
+  const originalJson = res.json.bind(res);
+  res.json = async (body) => {
+    await db.query(
+      `UPDATE idempotency_keys
+       SET status = 'completed', response_code = $1, response_body = $2
+       WHERE key = $3`,
+      [res.statusCode, JSON.stringify(body), key]
+    );
+    return originalJson(body);
+  };
+  next();
+}
+```
+
+The `INSERT ... ON CONFLICT DO NOTHING` is doing the heavy lifting. It atomically claims the key: if two concurrent requests race, only one wins the insert, and the other gets `rowCount === 0`. No check-then-insert, no race window.
+
+<Callout type="gotcha">
+
+Don't use the idempotency key as a primary key in your results table. Use a unique constraint on a separate column. The key is an index into a deduplication cache, not the identity of the business entity.
+
+</Callout>
+
+<Details title="Full implementation with race condition handling">
+
+The full production pattern includes: 
+(1) INSERT the idempotency key with a 'processing' status inside a transaction that also locks the row, 
+(2) perform the business logic, 
+(3) UPDATE the key row with the response and 'completed' status. If step 2 fails, a reaper process finds stale 'processing' keys and resets them for retry.
+
+Brandur's [implementation](https://brandur.org/idempotency-keys) uses Postgres advisory locks and a state machine with phases: `started` → `ride_created` → `charge_created` → `completed`. Each phase is atomic, and the system can resume from any phase on retry. The IETF is also [standardizing](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/) the `Idempotency-Key` header for HTTP APIs.
+
+</Details>
+
+<Callout type="takeaway">
+
+The idempotency key mechanism is simple in concept but has a critical race condition: concurrent retries with the same key can both pass the "not seen before" check. Use a unique constraint or advisory lock to serialize them.
+
+</Callout>
+
+## The Landscape: What the Platforms Actually Guarantee
+
+Every major messaging platform now claims some form of exactly-once. Here's what each one actually provides, and where the guarantee stops.
+
+<Mermaid
+  caption="Kafka's exactly-once guarantee covers the shaded region. Outside it, you need your own idempotency."
+  chart={`graph LR
+    subgraph kafka ["Kafka Exactly-Once Scope"]
+      P[Producer] -->|"Idempotent write"| T[Topic]
+      T --> C[Consumer]
+      C -->|"Transactional"| T2[Output Topic]
+    end
+    C -->|"YOUR responsibility"| DB["External DB"]
+    C -->|"YOUR responsibility"| API["Third-party API"]`}
+/>
+
+**Apache Kafka** provides exactly-once *semantics* for consume-transform-produce pipelines that stay entirely within Kafka. The mechanism: [idempotent producers](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=66854913) (dedup via producer ID + sequence number) plus transactions (atomic writes across multiple partitions). The guarantee stops at Kafka's boundary. If your consumer writes to Postgres, you're responsible for the idempotency of that write.
+
+**AWS SQS FIFO** provides exactly-once *processing* via content-based deduplication or explicit deduplication IDs. The dedup window is 5 minutes. After that, a duplicate can slip through. And the guarantee only covers message delivery to the consumer. What the consumer does with it is your problem.
+
+**Google Cloud Pub/Sub** added exactly-once *delivery* [in 2022](https://cloud.google.com/pubsub/docs/exactly-once-delivery). It guarantees no redelivery after successful acknowledgment, but only for pull subscriptions, only within a single cloud region, and your subscriber must handle the case where an ack itself fails.
+
+Notice the pattern: every platform qualifies its guarantee with a scope boundary. That's not a weakness, it's honesty about what's achievable.
+
+<Callout type="in-practice">
+
+SQS FIFO's 5-minute dedup window is surprisingly short. If your consumer is slow or your retry backoff exceeds 5 minutes, you can receive duplicates. Always add application-level dedup as a safety net.
+
+</Callout>
+
+<Details title="Detailed platform comparison table">
+
+| Dimension | Kafka | SQS FIFO | Pub/Sub |
+|---|---|---|---|
+| What they call it | Exactly-once semantics | Exactly-once processing | Exactly-once delivery |
+| Mechanism | Idempotent producer + transactions | Deduplication ID (5-min window) | Ack-based dedup (regional) |
+| Scope | Within Kafka topology | Message delivery to consumer | Message delivery (pull only) |
+| Your responsibility | External side effects | Consumer processing logic | Ack failures, processing logic |
+| Throughput impact | ~3% overhead for transactions | Reduced vs Standard queues | Minimal |
+
+</Details>
+
+<Callout type="takeaway">
+
+Every platform's "exactly-once" guarantee has a scope boundary. Inside the boundary: the platform handles dedup. Outside the boundary: you handle it with idempotency keys or transactional outbox.
+
+</Callout>
+
+## Where This Breaks: Three Real Failures
+
+These aren't hypotheticals. These are published post-mortems from companies that had idempotency implementations and still got bitten.
+
+**Failure 1: The replica lag trap.** Michal Drozd [documented a case](https://www.michal-drozd.com/en/blog/idempotency-keys-replica-lag/) where idempotency key lookups were routed to a read replica that lagged 2+ seconds behind the primary during traffic spikes. The code was textbook-correct: check if key exists, if not, process. But the replica hadn't received the key yet. Result: one DB record, two credit card charges. Fix: idempotency key reads MUST hit the primary, or use a strongly-consistent read path. This is the failure mode that catches teams who "did everything right."
+
+**Failure 2: The Kafka consumer rebalance.** Depop's engineering team [found](https://engineering.depop.com/exploring-kafka-consumer-at-least-once-delivery-guarantees-expectations-vs-reality-36fd03e7a5e1) their successful-processing counts wildly exceeding production counts. The cause: Kafka consumer rebalances (triggered by autoscaling and aggressive restarts) reset consumer offsets to the last committed position, replaying hundreds of messages per rebalance. Even without physical partition reassignment, a rebalance resets the consumer's position. If your consumer isn't idempotent, every rebalance creates duplicates.
+
+**Failure 3: The partial completion.** Your API charges the customer (external side effect), then crashes before recording the idempotency key. On retry, the key isn't found, so the system charges again. This is [Brandur's core insight](https://brandur.org/idempotency-keys): every foreign state mutation needs its own atomic phase. Record the key *before* the external call, update it with the result after. If the call fails, the key sits in a 'processing' state and retries can detect it.
+
+<Callout type="gotcha">
+
+Monitoring tip: track the ratio of idempotency key hits (cached responses returned) to misses (new requests processed). A sudden spike in hits means something upstream is retrying aggressively. A sudden drop to zero hits might mean your dedup store is broken or reads are hitting a stale replica.
+
+</Callout>
+
+<Callout type="takeaway">
+
+The three sneakiest idempotency failures are: read replicas that lag behind your writes (route dedup checks to primary), Kafka rebalances that silently replay messages (make consumers idempotent regardless), and partial completions where the side effect fires before the key is stored (use atomic phases).
+
+</Callout>
+
+## The Cheat Sheet
+
+- **"Exactly-once delivery"** over an unreliable network is impossible. The Two Generals Problem is an impossibility result, not a design challenge.
+- **"Exactly-once semantics"** within a system boundary (Kafka, SQS FIFO, Pub/Sub) is achievable and well-understood. It's Atomic Broadcast, equivalent to consensus.
+- **"Effectively-once processing"** at the application layer is what you actually build. At-least-once delivery plus idempotent processing gets you there.
+- The moment your request **crosses a system boundary** (Kafka to Postgres, your API to Stripe), you need application-level idempotency. No platform saves you here.
+- Most "is exactly-once possible?" arguments are **definitional disputes**, not technical ones. Figure out which level you're discussing before jumping in.
+
+### Further Reading
+
+**Start here:**
+
+- [You Cannot Have Exactly-Once Delivery](https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/) by Tyler Treat. The clearest explanation of why transport-level exactly-once is impossible. Start here.
+- [Exactly-once Support in Apache Kafka](https://medium.com/@jaykreps/exactly-once-support-in-apache-kafka-55e1fdd0a35f) by Jay Kreps. The counterargument: exactly-once semantics is well-defined and achievable. Read right after Treat to see both sides.
+
+**Go deeper:**
+
+- [Idempotence Is Not a Medical Condition](https://queue.acm.org/detail.cfm?id=2187821) by Pat Helland (ACM Queue, 2012). Dense but worth it. His four principles for message-passing systems are the kind of thing you memorize.
+- [Implementing Stripe-like Idempotency Keys in Postgres](https://brandur.org/idempotency-keys) by Brandur Leach. The best practical guide out there. Full state machine, reaper, race condition handling.
+- [Avoiding Double Payments in a Distributed Payments System](https://medium.com/airbnb-engineering/avoiding-double-payments-in-a-distributed-payments-system-2981f6b070bb) by Jon Chew (Airbnb Engineering). How Airbnb built a generic idempotency framework during their SOA migration.
+- [Designing Data-Intensive Applications, Chapter 11](https://dataintensive.net/) by Martin Kleppmann. The textbook treatment, from idempotent operations through deterministic retry to transactional processing.
+- [End-to-End Arguments in System Design](https://web.mit.edu/6.033/www/papers/endtoend.pdf) by Saltzer, Reed, Clark (1984). The paper that explains why reliability guarantees have to live at the application layer. Predicted this whole debate 30 years early.

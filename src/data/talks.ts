@@ -10,6 +10,15 @@ export interface Talk {
 
 export const talks: Talk[] = [
   {
+    slug: "consistency-models",
+    title: "Consistency Models in Distributed Systems",
+    date: "May 2026",
+    description:
+      "A first-principles tour of consistency models, from linearizability to eventual consistency. Covers the full hierarchy, production system choices (Dynamo, Spanner, CockroachDB), failure modes, and a practical decision framework.",
+    slidesPath: "/talks/consistency-models/",
+    pdfPath: "/talks/consistency-models/consistency-models-talk.pdf",
+  },
+  {
     slug: "durable-execution",
     title: "Durable Execution: An Introduction",
     date: "May 2026",

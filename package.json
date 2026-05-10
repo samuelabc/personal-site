@@ -6,9 +6,13 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build:slides": "cd slides && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../public/talks/durable-execution",
-    "build:slides:pdf": "cd slides && pnpm exec slidev export --output ../public/talks/durable-execution/durable-execution-talk.pdf",
-    "build": "pnpm build:slides && astro build",
+    "build:slides:durable-execution": "cd slides/durable-execution && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../public/talks/durable-execution",
+    "build:slides:consistency-models": "cd slides/consistency-models && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/consistency-models/ --out ../public/talks/consistency-models",
+    "build:slides:all": "pnpm build:slides:durable-execution && pnpm build:slides:consistency-models",
+    "build:slides:durable-execution:pdf": "cd slides/durable-execution && pnpm exec slidev export --output ../public/talks/durable-execution/durable-execution-talk.pdf",
+    "build:slides:consistency-models:pdf": "cd slides/consistency-models && pnpm exec slidev export --output ../public/talks/consistency-models/consistency-models-talk.pdf",
+    "build:slides:pdf:all": "pnpm build:slides:durable-execution:pdf && pnpm build:slides:consistency-models:pdf",
+    "build": "pnpm build:slides:all && astro build",
     "preview": "astro preview"
   },
   "pnpm": {
@@ -18,6 +22,7 @@
     ]
   },
   "dependencies": {
+    "@astrojs/mdx": "^5.0.4",
     "@astrojs/sitemap": "^3.7.2",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.2.1",

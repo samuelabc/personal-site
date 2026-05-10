@@ -2,12 +2,17 @@
 node_modules/
 
 screenshots/
+slides/*/node_modules/
 
 # Build output
 dist/
 .astro/
-public/talks/durable-execution/*
-!public/talks/durable-execution/durable-execution-talk.pdf
+
+# talks slidev will be built automatically during site build
+slides/public/talks/*/*
+public/talks/*/*
+# but we need to build and commit the pdfs manually
+!slides/public/talks/*/*/*.pdf
 
 # Logs
 npm-debug.log*

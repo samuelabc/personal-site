@@ -1,0 +1,13 @@
+---
+interface Props {
+  caption?: string;
+  chart: string;
+}
+
+const { caption, chart } = Astro.props;
+---
+
+<div class="mermaid-wrapper">
+  <pre class="mermaid">{chart}</pre>
+  {caption && <p class="mermaid-caption">{caption}</p>}
+</div>
