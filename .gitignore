@@ -12,7 +12,7 @@ dist/
 slides/public/talks/*/*
 public/talks/*/*
 # but we need to build and commit the pdfs manually
-!slides/public/talks/*/*/*.pdf
+!public/talks/*/*.pdf
 
 # Logs
 npm-debug.log*
