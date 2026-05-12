@@ -6,8 +6,8 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build:slides:durable-execution": "cd slides/durable-execution && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../public/talks/durable-execution",
-    "build:slides:consistency-models": "cd slides/consistency-models && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/consistency-models/ --out ../public/talks/consistency-models",
+    "build:slides:durable-execution": "cd slides/durable-execution && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/durable-execution/ --out ../../public/talks/durable-execution",
+    "build:slides:consistency-models": "cd slides/consistency-models && pnpm install --frozen-lockfile && pnpm exec slidev build --base /talks/consistency-models/ --out ../../public/talks/consistency-models",
     "build:slides:all": "pnpm build:slides:durable-execution && pnpm build:slides:consistency-models",
     "build:slides:durable-execution:pdf": "cd slides/durable-execution && pnpm exec slidev export --output ../../public/talks/durable-execution/durable-execution-talk.pdf",
     "build:slides:consistency-models:pdf": "cd slides/consistency-models && pnpm exec slidev export --output ../../public/talks/consistency-models/consistency-models-talk.pdf",

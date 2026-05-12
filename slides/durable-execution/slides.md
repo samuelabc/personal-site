@@ -1087,12 +1087,9 @@ flowchart TD
 </v-clicks>
 
 <div v-click class="callout" style="margin-top: 0.75rem;">
-<p>Three families of solutions: 
-
-<strong>- distributed transactions</strong> (lock everything), 
-
-<strong>- sagas</strong> (compensate on failure), 
-
+<p>Three families of solutions:
+<strong>- distributed transactions</strong> (lock everything),
+<strong>- sagas</strong> (compensate on failure),
 <strong>- durable execution</strong> (orchestrate as a function).</p>
 </div>
 
