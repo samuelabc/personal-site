@@ -264,6 +264,7 @@ body {
 
 /* ── Book card ── */
 .book-card {
+  display: block;
   aspect-ratio: 2 / 3;
   cursor: pointer;
   outline: none;
@@ -272,6 +273,8 @@ body {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 12px oklch(0% 0 0 / 0.05);
+  text-decoration: none;
+  color: inherit;
   transition:
     transform 0.5s var(--ease-smooth),
     box-shadow 0.5s var(--ease-smooth);
