@@ -171,5 +171,7 @@ A good test: would knowing this save 5+ minutes in a future session? If yes, log
 - Writing section: MDX blog posts in src/content/writing/, rendered via BlogPost.astro layout with hand-written .prose CSS (not @tailwindcss/typography), max-width 720px centered
 - Blog components: Callout (4 types: definition/takeaway/gotcha/in-practice with icons), Mermaid (chart prop, not slot, rendered via CDN), Details (open by default)
 - Blog design rules: no side-stripe borders (banned by impeccable), full borders + background tints on callouts/blockquotes, OKLCH colors, code captions connect to code blocks via shared dark background
-- Mermaid in MDX must use chart prop (`<Mermaid chart={`...`} />`) because MDX wraps slot content in `<p>` tags which breaks mermaid parsing
+- Mermaid in MDX must use chart prop (`<Mermaid chart={`...`} />`) because MDX wraps slot content in `<p>` tags; Mermaid@11 doesn't support OKLCH colors — `BlogPost.astro` has a `resolveColor()` canvas helper that converts to sRGB hex at runtime
+- In MDX files, `<` before text or numbers is parsed as a JSX tag opening — escape with `&lt;` or reword (e.g. `<10ms` → `under 10ms`)
+- In Slidev markdown, blank lines inside explicit HTML blocks (e.g. `<p>`) cause the parser to create nested `<p>` tags (invalid HTML) — keep content contiguous without blank lines
 
