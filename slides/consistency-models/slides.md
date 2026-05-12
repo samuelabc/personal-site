@@ -1186,7 +1186,7 @@ Everything we've covered — the hierarchy, the systems, the failure modes — t
 
 ---
 class: dense
-<!-- optional: cut for 45-min version -->
+# optional: cut for 45-min version
 ---
 
 <p class="eyebrow">The Frontier</p>
@@ -1335,7 +1335,7 @@ Pause. The first half of this frontier section was about what changed — verifi
 -->
 
 ---
-<!-- optional: cut for 45-min version -->
+# optional: cut for 45-min version
 ---
 
 <p class="eyebrow">The Frontier</p>
@@ -1365,7 +1365,7 @@ Three approaches to strong consistency: Dynamo resolves conflicts after, Spanner
 -->
 
 ---
-<!-- optional: cut for 45-min version -->
+# optional: cut for 45-min version
 ---
 
 <p class="eyebrow">The Frontier</p>
@@ -1395,7 +1395,7 @@ This is where I think the field is headed. Remember the e-commerce slide where w
 -->
 
 ---
-<!-- optional: cut for 45-min version -->
+# optional: cut for 45-min version
 ---
 
 <p class="eyebrow">The Frontier</p>
