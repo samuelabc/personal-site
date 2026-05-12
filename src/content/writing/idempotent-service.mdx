@@ -1,0 +1,805 @@
+---
+title: "So You Want to Build an Idempotent Service"
+subtitle: "From f(f(x)) = f(x) to production middleware — three strategies for not doing things twice"
+date: 2026-05-13
+tags: ["distributed-systems", "idempotency", "reliability", "api-design"]
+readTime: "15 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## The Webhook That Wouldn't Stop
+
+You're building a Shopify integration. When a customer places an order, Shopify sends a webhook. Your handler creates a fulfillment record, reserves inventory, and fires off a packing slip to the warehouse printer.
+
+Works great in development. In production, Shopify delivers webhooks [at-least-once](https://shopify.dev/docs/apps/build/webhooks/best-practices). During a flash sale, your endpoint takes 4 seconds to respond. Shopify's retry logic decides you're dead and sends the webhook again. Now you have two fulfillment records, double the inventory reserved, and two packing slips printing.
+
+Your first instinct: "check if we've already processed this order." So you add an if-exists check before processing. In staging, it works. In production, two retries arrive 200ms apart. Both check, both find nothing, both process. You're back where you started.
+
+Idempotency is the word for "doing the same thing twice has the same effect as doing it once." It sounds simple. But the gap between the definition and a production implementation is where most of the engineering lives. This post walks through that gap.
+
+## What "Idempotent" Actually Means
+
+The mathematical definition: f(f(x)) = f(x). Apply the function to its own output, and you get the same output. In engineering terms: run the same operation twice (or ten times, or a hundred), and the system ends up in the same state as if you'd run it once.
+
+<Callout type="definition">
+
+**Idempotent** — an operation where executing it multiple times produces the same system state as executing it once. Mathematically: f(f(x)) = f(x). In HTTP terms ([RFC 9110, Section 9.2.2](https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)): "the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request."
+
+</Callout>
+
+This sounds abstract until you see concrete examples:
+
+`SET balance = 500` — idempotent. Run it a hundred times, balance is still 500.
+
+`SET balance = balance - 50` — NOT idempotent. Run it twice, you've deducted 100.
+
+`DELETE FROM orders WHERE id = 42` — idempotent. Second delete is a no-op.
+
+`INSERT INTO orders (id, ...) VALUES (42, ...)` — NOT idempotent (without a unique constraint, you get two rows).
+
+The key distinction is between operations that describe a *target state* ("set this to X") versus operations that describe a *delta* ("add X to this"). Target-state operations are naturally idempotent. Delta operations are not.
+
+<Mermaid
+  caption="Target-state operations are naturally idempotent. Delta operations are not. Your first move is to check if you can rewrite your operation as a target-state."
+  chart={`graph LR
+    subgraph idempotent ["Idempotent Operations"]
+      A["SET x = 5"]
+      B["DELETE row 42"]
+      C["PUT /users/42\n{name: 'Jo'}"]
+    end
+    subgraph not_idempotent ["Not Idempotent"]
+      D["x = x + 1"]
+      E["INSERT row"]
+      F["POST /orders\n{item: 'widget'}"]
+    end
+    A -.->|"Target state"| G["Describes where\nyou want to end up"]
+    D -.->|"Delta"| H["Describes what\nto change by"]`}
+/>
+
+Here's the part that trips people up: idempotent doesn't mean "returns the same response." A DELETE request might return 200 the first time and 404 the second time. The responses differ, but the *effect* is the same — the row is gone. RFC 9110 puts it precisely: "the intended effect on the server of multiple identical requests with that method is the same as the effect for a single such request."
+
+And critically: idempotent is not the same as *safe*. HTTP GET is both safe (no side effects) and idempotent. HTTP DELETE is idempotent but not safe (it has side effects). HTTP POST is neither.
+
+<Callout type="gotcha">
+
+HTTP method idempotency in RFC 9110 is a *should*, not a *must*. The spec says methods like PUT and DELETE are defined as idempotent, but nothing prevents a server from implementing a DELETE that has different effects on repeated calls. The contract is between you and your callers. If you say your endpoint is idempotent, you're responsible for making it so.
+
+</Callout>
+
+<Details title="The formal math, and why it matters">
+
+In algebra, an idempotent element *e* of a set satisfies e \* e = e. In computer science, an idempotent function satisfies f(f(x)) = f(x) for all x in the domain.
+
+Pat Helland extends this in "[Idempotence Is Not a Medical Condition](https://queue.acm.org/detail.cfm?id=2187821)": in a messaging system, idempotence means that the processing of duplicate messages doesn't change the outcome. But he distinguishes between *natural* idempotence (the operation is inherently repeatable) and *designed* idempotence (you add mechanisms like deduplication to make it repeatable).
+
+This distinction maps directly to our three strategies: natural idempotency (just rewrite the operation), idempotency keys (add a dedup layer), and content fingerprinting (hash the request).
+
+</Details>
+
+<Callout type="takeaway">
+
+Idempotent means "same effect, not necessarily same response." The first question for any operation: can you rewrite it as a target state instead of a delta?
+
+</Callout>
+
+## Three Strategies, One Decision Tree
+
+Not every operation needs the same treatment. The right strategy depends on two questions: can you control how the operation is written, and do you control the client?
+
+If you can rewrite the operation to be naturally idempotent (SET instead of INCREMENT), do that first. It's the cheapest and most robust approach. No extra infrastructure, no storage overhead, no expiry policies.
+
+If you control both sides — your API and the clients calling it — use idempotency keys. The client generates a key, sends it with every retry, and the server deduplicates. This is the pattern Stripe popularized and the IETF is now [standardizing](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header).
+
+If you don't control the client — webhooks, third-party events, messages from a queue — use content fingerprinting. Hash the relevant fields of the incoming request and dedup on the hash.
+
+<Mermaid
+  caption="Decision tree for choosing an idempotency strategy. Start with the simplest option that fits your constraints."
+  chart={`graph LR
+    A{"Can you rewrite\nthe operation?"} -->|Yes| B["Strategy 1:\nNatural idempotency\n(simplest)"]
+    A -->|No| C{"Control\nthe client?"}
+    C -->|Yes| D["Strategy 2:\nIdempotency keys\n(most common)"]
+    C -->|No| E["Strategy 3:\nContent fingerprinting\n(for webhooks/events)"]`}
+/>
+
+| Strategy | When to Use | Client Changes? | Extra Storage? |
+|---|---|---|---|
+| Natural idempotency | You control the operation's implementation | No | No |
+| Idempotency keys | You control both API and client | Yes (send key header) | Yes (key store) |
+| Content fingerprinting | You don't control the sender (webhooks, events) | No | Yes (hash store) |
+
+The rest of this post walks through each strategy with full implementations. If you already know which one you need, skip ahead.
+
+<Callout type="takeaway">
+
+Three strategies, in order of preference: rewrite the operation, add idempotency keys, or fingerprint the content. Don't jump to keys if a rewrite would do.
+
+</Callout>
+
+## Strategy 1: Just Write It Differently
+
+The cheapest idempotency is the kind you don't have to build. Many non-idempotent operations can be rewritten as idempotent ones with a small design change, no middleware required.
+
+### Pattern A: UPSERT instead of INSERT
+
+If you're creating a record and the record might already exist (from a retry), don't INSERT blindly — use `INSERT ... ON CONFLICT`. Postgres calls this UPSERT. It atomically inserts if the row doesn't exist, or handles the conflict if it does.
+
+<p class="code-caption">Idempotent order creation with Postgres UPSERT</p>
+
+```sql
+INSERT INTO orders (order_id, customer_id, total_cents)
+VALUES ('ord_abc123', 'cust_42', 2999)
+ON CONFLICT (order_id) DO NOTHING;
+```
+
+The `ON CONFLICT DO NOTHING` makes the INSERT a no-op if the `order_id` already exists. No error, no duplicate row, no race condition. The unique constraint on `order_id` does the dedup work at the database level.
+
+<Callout type="in-practice">
+
+UPSERT with `ON CONFLICT DO NOTHING` is faster than `DO UPDATE` because Postgres skips the update path entirely. For pure dedup (you don't need to merge data), always prefer `DO NOTHING`.
+
+</Callout>
+
+### Pattern B: SET instead of INCREMENT
+
+Instead of `UPDATE accounts SET balance = balance - 50`, compute the new balance on the application side and write the absolute value: `UPDATE accounts SET balance = 450 WHERE id = 1 AND version = 7`. The version check (optimistic concurrency control) ensures the update only applies if the row hasn't changed since you read it. A retry with the same version finds a mismatch and does nothing.
+
+<p class="code-caption">Optimistic concurrency with a version column</p>
+
+```sql
+-- Read current state
+SELECT balance_cents, version FROM accounts WHERE id = 1;
+-- Returns: balance_cents=500, version=7
+
+-- Write with version guard
+UPDATE accounts
+SET balance_cents = 450, version = 8, updated_at = NOW()
+WHERE id = 1 AND version = 7;
+-- Returns: UPDATE 1 (success) or UPDATE 0 (stale, retry)
+```
+
+<Callout type="gotcha">
+
+Optimistic concurrency only works if you read the current version before writing. If two concurrent requests read the same version, one will succeed and the other will affect zero rows. Your code needs to check the affected row count and handle the "stale version" case — usually by re-reading and retrying, or returning a 409 Conflict.
+
+</Callout>
+
+### Pattern C: Conditional writes
+
+For status transitions, add a WHERE clause that only matches the expected current state: `UPDATE orders SET status = 'shipped' WHERE id = 42 AND status = 'paid'`. If the order is already shipped, the UPDATE affects zero rows. The state machine itself becomes the dedup mechanism.
+
+<p class="code-caption">State-machine transition as idempotency guard</p>
+
+```sql
+UPDATE orders
+SET status = 'shipped', shipped_at = NOW()
+WHERE id = 42 AND status = 'paid';
+-- Returns: UPDATE 1 (transitioned) or UPDATE 0 (already shipped)
+```
+
+These patterns share a property: the database does the idempotency work. No application logic needed beyond writing the query correctly.
+
+<Details title="Full schema examples for all three patterns">
+
+**Pattern A schema:**
+
+```sql
+CREATE TABLE orders (
+  order_id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL,
+  total_cents INTEGER NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Idempotent insert:
+INSERT INTO orders (order_id, customer_id, total_cents)
+VALUES ('ord_abc123', 'cust_42', 2999)
+ON CONFLICT (order_id) DO NOTHING;
+```
+
+**Pattern B schema:**
+
+```sql
+CREATE TABLE accounts (
+  id SERIAL PRIMARY KEY,
+  balance_cents INTEGER NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Read current state:
+SELECT balance_cents, version FROM accounts WHERE id = 1;
+-- Returns: balance_cents=500, version=7
+
+-- Write with version guard:
+UPDATE accounts
+SET balance_cents = 450, version = 8, updated_at = NOW()
+WHERE id = 1 AND version = 7;
+-- Returns: UPDATE 1 (success) or UPDATE 0 (stale version, retry)
+```
+
+**Pattern C schema:**
+
+```sql
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'pending',
+  shipped_at TIMESTAMPTZ
+);
+
+-- Conditional state transition:
+UPDATE orders
+SET status = 'shipped', shipped_at = NOW()
+WHERE id = 42 AND status = 'paid';
+-- Returns: UPDATE 1 (transitioned) or UPDATE 0 (already shipped)
+```
+
+</Details>
+
+<Callout type="takeaway">
+
+Before building idempotency infrastructure, check if you can make the operation itself idempotent. UPSERT, absolute-value writes, and conditional state transitions are free and robust.
+
+</Callout>
+
+## Where Does the Idempotency Layer Live?
+
+The next two strategies add infrastructure. Before we build anything, it helps to see where the idempotency layer actually sits in a request's life. Put it in the wrong place and you either miss requests or create a bottleneck.
+
+<Mermaid
+  caption="The idempotency layer sits between the API gateway and your business logic. It intercepts the request before any side effects happen."
+  chart={`graph LR
+    A["Client\n(generates key)"] -->|"Idempotency-Key\nheader"| B["API Gateway\n/ Load Balancer"]
+    B --> C["Idempotency\nMiddleware"]
+    C -->|"New request"| D["Business\nLogic"]
+    C -->|"Duplicate"| E["Return cached\nresponse"]
+    D --> F["Database"]
+    D --> G["External APIs"]
+    C -.->|"Store key + result"| H["Dedup Store\n(DB / Redis)"]`}
+/>
+
+<Callout type="in-practice">
+
+Some teams put idempotency at the API gateway level (e.g. AWS API Gateway with Lambda). This works for simple cases but breaks when different endpoints need different dedup logic. Most production implementations use application-level middleware.
+
+</Callout>
+
+## Strategy 2: Idempotency Keys
+
+This is the most common pattern for API idempotency, and the one [Stripe made famous](https://stripe.com/blog/idempotency). The idea: the client generates a unique key for each logical request and sends it via a header. The server uses this key to detect and deduplicate retries.
+
+**The contract:**
+
+1. Client generates a unique key (UUID v4 or a deterministic hash of the request).
+2. Client sends the key in every retry of the same logical request.
+3. Server stores the key on first processing.
+4. On subsequent requests with the same key, server returns the cached response.
+
+The IETF is standardizing this as the [`Idempotency-Key` header](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header). Stripe uses `Idempotency-Key`, Google uses `request_id` as a query parameter ([AIP-155](https://google.aip.dev/155)). The mechanism is the same.
+
+### The schema
+
+<p class="code-caption">Postgres table for storing idempotency keys</p>
+
+```sql
+CREATE TABLE idempotency_keys (
+  key TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'processing',
+  response_code INTEGER,
+  response_body JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### The middleware
+
+The critical insight is the `INSERT ... ON CONFLICT` that atomically claims the key. If two concurrent retries race, only one wins the insert. The other gets `rowCount === 0` and knows it's a duplicate. No check-then-insert race window.
+
+<p class="code-caption">Express/Node.js idempotency middleware</p>
+
+```typescript
+import crypto from "node:crypto";
+import { pool } from "./db";
+
+export async function idempotencyMiddleware(req, res, next) {
+  const key = req.headers["idempotency-key"];
+  if (!key) return next();
+
+  // Atomically claim the key — no race window
+  const { rowCount } = await pool.query(
+    `INSERT INTO idempotency_keys (key, status)
+     VALUES ($1, 'processing')
+     ON CONFLICT (key) DO NOTHING`,
+    [key]
+  );
+
+  if (rowCount === 1) {
+    // We claimed the key — process the request
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      // Cache the response for future retries
+      pool.query(
+        `UPDATE idempotency_keys
+         SET status = 'done', response_code = $1, response_body = $2
+         WHERE key = $3`,
+        [res.statusCode, JSON.stringify(body), key]
+      );
+      return originalJson(body);
+    };
+    return next();
+  }
+
+  // Key already exists — return cached response or 409
+  const { rows } = await pool.query(
+    `SELECT status, response_code, response_body
+     FROM idempotency_keys WHERE key = $1`,
+    [key]
+  );
+
+  if (rows[0].status === "processing") {
+    return res.status(409).json({
+      error: "Request is still being processed. Retry later.",
+    });
+  }
+
+  return res.status(rows[0].response_code).json(rows[0].response_body);
+}
+```
+
+<Mermaid
+  caption="Idempotency key flow. The INSERT ON CONFLICT atomically claims the key — no race window between check and insert."
+  chart={`sequenceDiagram
+    participant C as Client
+    participant M as Idempotency<br/>Middleware
+    participant BL as Business<br/>Logic
+    participant DB as Dedup Store
+    Note over C: First request
+    C->>M: POST /orders (Key: abc-123)
+    M->>DB: INSERT key 'abc-123' status='processing'
+    DB-->>M: Inserted (new key)
+    M->>BL: Process order
+    BL-->>M: Success (order created)
+    M->>DB: UPDATE key 'abc-123' status='done', cache response
+    M-->>C: 201 Created
+    Note over C: Retry (same key)
+    C->>M: POST /orders (Key: abc-123)
+    M->>DB: INSERT key 'abc-123' status='processing'
+    DB-->>M: Conflict (key exists)
+    M->>DB: SELECT cached response for 'abc-123'
+    DB-->>M: {status: 'done', response: 201}
+    M-->>C: 201 Created (cached)`}
+/>
+
+### Key generation
+
+There are two schools:
+
+**Random UUIDs** (Stripe's approach): The client generates a UUID v4 for each new request and reuses it for retries. Simple, no coordination needed. Downside: if the client crashes between generating the key and receiving the response, it can't reconstruct the key to retry.
+
+**Deterministic keys** (hash of request parameters): Hash the relevant fields (customer ID + amount + currency + timestamp-bucket). The client can always reconstruct the key. Downside: you need to choose the right fields. Include too few and different requests collide. Include too many and retries don't match.
+
+Stripe recommends UUID v4 but accepts any string up to 255 characters. Google's AIP-155 recommends UUID v4 format. For most APIs, random UUIDs are the simpler choice.
+
+### Key expiry
+
+Keys don't live forever. Stripe expires them after 24 hours. Your expiry window should be: the longest realistic retry window + some buffer. Too short and late retries create duplicates. Too long and your dedup table grows without bound. A background reaper job cleans up expired keys.
+
+<Callout type="gotcha">
+
+What if the first request is still processing when the retry arrives? The key exists with `status='processing'` but there's no cached response yet. Options: return 409 Conflict ("try again later"), return 202 Accepted ("still working on it"), or block and poll until the first request completes. Stripe returns 409. Most APIs should too — let the client decide when to retry.
+
+</Callout>
+
+<Callout type="in-practice">
+
+Stripe validates that retry requests have the same parameters as the original. If you send the same `Idempotency-Key` with different request bodies, Stripe returns an error. This catches bugs where a client reuses keys across different operations. Implement this check in your middleware.
+
+</Callout>
+
+<Details title="Full production implementation with reaper and parameter validation">
+
+The complete production pattern adds three things:
+
+**1. Parameter validation.** Hash the request body and store it alongside the key. On retry, compare the hash. If it doesn't match, return 422 — the client is reusing a key for a different request.
+
+**2. Reaper job.** A cron or background job that periodically deletes keys older than the expiry window (e.g. 24 hours). This is a simple `DELETE FROM idempotency_keys WHERE created_at < NOW() - INTERVAL '24 hours'`.
+
+**3. Stale processing detection.** If a key has been in 'processing' status for longer than the expected request timeout (e.g. 30 seconds), it's likely that the original request crashed. The reaper resets these to allow retry: `UPDATE idempotency_keys SET status = 'pending' WHERE status = 'processing' AND created_at < NOW() - INTERVAL '30 seconds'`.
+
+Brandur's [full implementation](https://brandur.org/idempotency-keys) uses a state machine with phases: started, ride_created, charge_created, completed. Each phase is its own atomic step, so the system can resume from any phase on retry. This is essential when your business logic involves external API calls that can't be rolled back.
+
+<p class="code-caption">Extended schema with parameter hashing and cleanup index</p>
+
+```sql
+CREATE TABLE idempotency_keys (
+  key TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'processing',
+  request_hash TEXT NOT NULL,
+  response_code INTEGER,
+  response_body JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_idempotency_keys_cleanup
+  ON idempotency_keys (created_at)
+  WHERE status = 'completed';
+```
+
+<p class="code-caption">Parameter validation addition to middleware</p>
+
+```typescript
+const requestHash = crypto
+  .createHash("sha256")
+  .update(JSON.stringify(req.body))
+  .digest("hex");
+
+// On duplicate key found:
+if (cached.request_hash !== requestHash) {
+  return res.status(422).json({
+    error: "Idempotency key reused with different parameters",
+  });
+}
+```
+
+</Details>
+
+<Callout type="takeaway">
+
+Idempotency keys work because `INSERT ON CONFLICT` is atomic — the database serializes concurrent claims. The client generates the key, the server stores it, and retries return cached responses.
+
+</Callout>
+
+## Strategy 3: Content Fingerprinting
+
+Idempotency keys require the client to cooperate — generate a key, send it on retries. But what if you don't control the client? Webhook providers (Stripe, Shopify, GitHub), message queues, event buses — they send what they send. You can't ask Shopify to add a custom header.
+
+Content fingerprinting flips the approach: instead of the client providing a deduplication key, the server computes one from the request content.
+
+### Which fields to hash?
+
+This is where fingerprinting gets tricky. You need fields that are:
+
+- **Stable across retries** (same value every time the same event is delivered)
+- **Unique per logical event** (different value for different events)
+- **Not too broad** (including a timestamp means every retry is "unique")
+
+Most webhook providers solve this by including an event ID. Stripe sends `event.id`, Shopify sends `X-Shopify-Webhook-Id`, GitHub sends `X-GitHub-Delivery`. If the provider gives you a stable event identifier, use that directly as your dedup key — no hashing needed.
+
+If the provider doesn't give you a stable ID (or you're consuming events from a message queue that doesn't guarantee unique IDs), hash the fields that define the logical event: `SHA-256(order_id + event_type + amount)`.
+
+<p class="code-caption">Webhook fingerprinting middleware</p>
+
+```typescript
+import crypto from "node:crypto";
+import { pool } from "./db";
+
+export async function webhookDedup(req, res, next) {
+  // Prefer provider-supplied event ID
+  const eventId =
+    req.headers["x-shopify-webhook-id"] ||
+    req.body?.event?.id;
+
+  const fingerprint = eventId
+    ? eventId
+    : crypto
+        .createHash("sha256")
+        .update(
+          `${req.body.order_id}:${req.body.event_type}:${req.body.amount}`
+        )
+        .digest("hex");
+
+  const { rowCount } = await pool.query(
+    `INSERT INTO event_fingerprints (fingerprint, received_at)
+     VALUES ($1, NOW())
+     ON CONFLICT (fingerprint) DO NOTHING`,
+    [fingerprint]
+  );
+
+  if (rowCount === 0) {
+    // Already processed — acknowledge and skip
+    return res.status(200).json({ status: "duplicate, skipped" });
+  }
+
+  next();
+}
+```
+
+<Callout type="gotcha">
+
+Don't hash the entire request body. Providers often include metadata that changes between deliveries — timestamps, attempt counters, delivery IDs. Hash only the fields that identify the logical event. If you hash the full body, every retry looks like a new event.
+
+</Callout>
+
+<Mermaid
+  caption="Content fingerprinting decision flow. Prefer provider-supplied event IDs over computed hashes."
+  chart={`graph LR
+    A["Webhook\narrives"] --> B{"Has event ID\nheader?"}
+    B -->|Yes| C["Use event ID\nas dedup key"]
+    B -->|No| D["Hash stable fields\n(order_id + type + amount)"]
+    C --> E{"Key in\ndedup store?"}
+    D --> E
+    E -->|Yes| F["Skip processing\nReturn 200"]
+    E -->|No| G["Process event\nStore key with TTL"]`}
+/>
+
+### The TTL question
+
+Fingerprint records need a time-to-live because your dedup table can't grow forever. Set the TTL to: the maximum retry window of the sender + buffer. Stripe retries for up to 72 hours. Shopify retries 8 times over 4 hours. Your TTL should exceed the sender's maximum retry window.
+
+<Callout type="in-practice">
+
+For Stripe webhooks, the `event.id` field is stable across retries. You can use it directly as a dedup key without any hashing. Store it in your database with `INSERT ... ON CONFLICT (event_id) DO NOTHING`, and you have idempotent webhook handling in one query.
+
+</Callout>
+
+<Details title="Redis vs. Postgres for fingerprint storage">
+
+**Postgres** (with ON CONFLICT):
+- Pro: ACID guarantees, no separate infrastructure, works with your existing DB.
+- Pro: Atomic `INSERT ... ON CONFLICT` eliminates race conditions.
+- Con: Requires a cleanup job for expired records.
+- Best for: Services already using Postgres, moderate throughput.
+
+**Redis** (with SET NX EX):
+- Pro: Built-in TTL (no cleanup job needed).
+- Pro: Very fast for high-throughput event processing.
+- Con: No ACID guarantees. If Redis crashes after processing but before storing the key, you can get duplicates on restart.
+- Con: Separate infrastructure to manage.
+- Best for: High-throughput event consumers, ephemeral dedup with acceptable small-window risk.
+
+**The hybrid approach:** Use Postgres as the source of truth (`INSERT ON CONFLICT` for the business logic) and Redis as a fast-path cache (`SET NX` to short-circuit obvious duplicates before hitting the database). This gives you both speed and correctness.
+
+</Details>
+
+<Callout type="takeaway">
+
+When you don't control the client, compute the dedup key from the content. Use the provider's event ID if available. Hash stable fields if not. Set TTL to exceed the sender's retry window.
+
+</Callout>
+
+## Five Bugs You'll Ship (and How to Catch Them)
+
+You'll build an idempotency layer, test it in staging, and ship it. Then production will find the bugs you missed. Here are the five most common ones, in the order you'll likely encounter them.
+
+### Bug 1: The check-then-act race condition
+
+You wrote `SELECT ... IF NOT EXISTS ... INSERT` instead of `INSERT ... ON CONFLICT`. Two requests arrive 10ms apart. Both SELECT, both find nothing, both INSERT. You have duplicates. The fix is atomic operations: let the database handle the serialization with a unique constraint and `ON CONFLICT`.
+
+### Bug 2: The replica lag trap
+
+Your idempotency key lookups hit a read replica. During traffic spikes, the replica lags 2+ seconds behind the primary. A retry arrives during the lag window, doesn't find the key on the replica, and processes the request again. [Michal Drozd documented](https://www.michal-drozd.com/en/blog/idempotency-keys-replica-lag/) this exact failure in a payment system. The fix: idempotency key reads MUST hit the primary database, or use a strongly-consistent read path.
+
+<Callout type="gotcha">
+
+Bug 2 (replica lag) is particularly nasty because it only manifests under load, when replicas lag. Your staging environment probably doesn't have read replicas, so you'll never see it until production. If you use read replicas, add a monitoring alert for replication lag and route idempotency checks to the primary.
+
+</Callout>
+
+### Bug 3: The side effect that fires before the key is stored
+
+Your handler charges the customer (external side effect), then stores the idempotency key. The process crashes between the charge and the store. On retry, the key isn't found, and the customer gets charged again. The fix: store the key BEFORE the side effect, with a 'processing' status. Update it to 'completed' after. This is [Brandur's core insight](https://brandur.org/idempotency-keys) about atomic phases.
+
+<Callout type="in-practice">
+
+Bug 3 (side effect before key) is why Brandur recommends "atomic phases." Each external side effect gets its own phase in the idempotency key state machine: started, charged, notified, completed. On retry, the system checks which phase completed and resumes from there. This turns a monolithic "process request" into a series of checkpointed steps.
+
+</Callout>
+
+### Bug 4: The key that expired too early
+
+Your keys expire after 24 hours. A client's retry backoff exceeds 24 hours (maybe they have a dead-letter queue that reprocesses after 48 hours). The retry arrives, the key is gone, and the request processes again. The fix: set your expiry window to exceed the longest realistic retry chain, including any dead-letter reprocessing.
+
+### Bug 5: The response that changed
+
+Your endpoint returns different data on the retry than on the original (e.g., a timestamp field, a server-generated field). The client gets confused because the two responses don't match. The fix: cache and return the complete original response, not just the status code.
+
+<Details title="Monitoring your idempotency layer">
+
+Track these metrics to catch idempotency bugs before users report them:
+
+1. **Dedup hit rate**: ratio of cached-response returns to new-request processing. A sudden spike means something upstream is retrying aggressively. A sudden drop to zero means your dedup store might be broken.
+
+2. **Concurrent duplicate rate**: how often two requests with the same key arrive within the same processing window. High rates suggest the client is retrying too aggressively or your endpoint is too slow.
+
+3. **Stale 'processing' keys**: keys that have been in 'processing' status for longer than your request timeout. These represent crashed requests that need cleanup. Alert if this count exceeds a threshold.
+
+4. **Replication lag** (if using read replicas): monitor the lag between primary and replicas. Alert if lag exceeds your idempotency check's consistency requirements.
+
+5. **Key expiry distribution**: how old are keys when the reaper deletes them? If many keys are being accessed near their expiry time, your window might be too short.
+
+</Details>
+
+<Callout type="takeaway">
+
+The five bugs, in order of sneakiness: check-then-act races, replica lag on reads, side effects before key storage, premature key expiry, and inconsistent cached responses. All are fixable. None are obvious in staging.
+
+</Callout>
+
+## Testing Idempotency
+
+Idempotency bugs are concurrency bugs. Unit tests that run sequentially won't catch them. You need tests that simulate the conditions where idempotency fails: concurrent requests, partial failures, delayed retries.
+
+**Test 1: Exact duplicate.** Send the same request twice with the same key. Assert that the second request returns the cached response and the side effect (database row, external call) happened exactly once.
+
+**Test 2: Concurrent duplicates.** Send 10 requests with the same key simultaneously (`Promise.all` or equivalent). Assert that exactly one request processes, the other 9 return cached responses, and the side effect happened once.
+
+**Test 3: Different key, same content.** Send two requests with the same body but different idempotency keys. Assert that both process — idempotency keys are per-key, not per-content (unless you're using fingerprinting).
+
+**Test 4: Same key, different content.** Send two requests with the same key but different bodies. Assert that the second request returns an error (422 or similar), not the cached response from the first.
+
+**Test 5: Key expiry.** Insert a key with a past expiry time. Send a request with that key. Assert that it processes as a new request.
+
+<p class="code-caption">Concurrent idempotency test — the one most teams skip</p>
+
+```typescript
+test("concurrent duplicates process exactly once", async () => {
+  const key = crypto.randomUUID();
+  const body = { item: "widget", quantity: 1 };
+
+  const requests = Array.from({ length: 10 }, () =>
+    api.post("/orders", body, {
+      headers: { "Idempotency-Key": key },
+    })
+  );
+  const results = await Promise.all(requests);
+
+  // Exactly one should have processed
+  const orders = await db.query(
+    "SELECT count(*) FROM orders WHERE idempotency_key = $1",
+    [key]
+  );
+  expect(orders.rows[0].count).toBe("1");
+});
+```
+
+Test 2 is the one most teams skip, and it's the one that catches the most bugs. If your idempotency layer survives 10 concurrent identical requests, it will survive production.
+
+<Callout type="in-practice">
+
+In CI, concurrent tests can be flaky if the test database is slow. Use a dedicated test database with minimal latency, or run concurrent tests in a separate CI step with a real (non-mocked) database. Mocking the database defeats the purpose — you're testing that the database handles concurrency correctly.
+
+</Callout>
+
+<Details title="Full test suite template" open={false}>
+
+```typescript
+describe("idempotency", () => {
+  test("exact duplicate returns cached response", async () => {
+    const key = crypto.randomUUID();
+    const body = { item: "widget", quantity: 1 };
+
+    const first = await api.post("/orders", body, {
+      headers: { "Idempotency-Key": key },
+    });
+    const second = await api.post("/orders", body, {
+      headers: { "Idempotency-Key": key },
+    });
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.data).toEqual(first.data);
+
+    const orders = await db.query(
+      "SELECT count(*) FROM orders WHERE idempotency_key = $1",
+      [key]
+    );
+    expect(orders.rows[0].count).toBe("1");
+  });
+
+  test("concurrent duplicates process exactly once", async () => {
+    const key = crypto.randomUUID();
+    const body = { item: "widget", quantity: 1 };
+
+    const requests = Array.from({ length: 10 }, () =>
+      api.post("/orders", body, {
+        headers: { "Idempotency-Key": key },
+      })
+    );
+    const results = await Promise.all(requests);
+
+    const successes = results.filter((r) => r.status === 201);
+    const cached = results.filter(
+      (r) => r.status === 201 || r.status === 409
+    );
+    expect(successes.length + cached.length).toBe(10);
+
+    const orders = await db.query(
+      "SELECT count(*) FROM orders WHERE idempotency_key = $1",
+      [key]
+    );
+    expect(orders.rows[0].count).toBe("1");
+  });
+
+  test("same key, different body returns error", async () => {
+    const key = crypto.randomUUID();
+
+    await api.post(
+      "/orders",
+      { item: "widget", quantity: 1 },
+      { headers: { "Idempotency-Key": key } }
+    );
+
+    const second = await api.post(
+      "/orders",
+      { item: "gadget", quantity: 2 },
+      { headers: { "Idempotency-Key": key } }
+    );
+
+    expect(second.status).toBe(422);
+  });
+});
+```
+
+</Details>
+
+<Callout type="takeaway">
+
+Test concurrency, not just sequence. Ten simultaneous requests with the same key should produce exactly one side effect. If your test suite doesn't include this, you don't know if your idempotency layer works.
+
+</Callout>
+
+## The Bigger Picture
+
+Idempotency doesn't exist in isolation. It's one primitive in a larger reliability toolkit. Knowing how the pieces compose tells you when you're done building and when you still have gaps.
+
+**Idempotency + retries** = safe automatic recovery. Without idempotency, retries multiply failures. With it, retries are a reliability mechanism.
+
+**Idempotency + transactional outbox** = reliable cross-system operations. The outbox pattern guarantees that a state change and its corresponding event are both committed or both rolled back. The consumer's idempotency guarantees the event is processed exactly once.
+
+**Idempotency + durable execution** = crash-proof workflows. Durable execution frameworks (Temporal, Restate, DBOS) checkpoint each step. Idempotency ensures that steps involving external side effects are safe to replay.
+
+These patterns layer. You almost never need just one. But idempotency is the foundation — the other patterns assume your operations are idempotent.
+
+For the theoretical framework behind all of this — why transport-level exactly-once is impossible, what platforms actually guarantee, and where the boundaries are — see [Exactly-Once Is a Lie (Sort Of)](/writing/exactly-once-is-a-lie).
+
+<Mermaid
+  caption="Idempotency is the foundation. Retries, outbox, and durable execution all assume your operations are idempotent."
+  chart={`graph LR
+    A["Idempotency\n(this post)"] -->|enables| B["Safe retries"]
+    A -->|enables| C["Transactional\noutbox"]
+    A -->|enables| D["Durable\nexecution"]
+    B -->|"at-least-once\n+ idempotent"| E["Effectively-once\nprocessing"]
+    C -->|"reliable cross-\nsystem ops"| E
+    D -->|"crash-proof\nworkflows"| E`}
+/>
+
+<Callout type="takeaway">
+
+Idempotency is the foundation that makes retries safe, outbox patterns reliable, and durable execution possible. It's not the whole solution, but nothing else works without it.
+
+</Callout>
+
+## The Cheat Sheet
+
+- **Idempotent** means "same effect on repeated execution," not "same response." The mathematical definition — f(f(x)) = f(x) — maps directly to engineering: target-state operations are naturally idempotent, delta operations are not.
+
+- **Three strategies**, in order of preference: (1) rewrite the operation to be naturally idempotent (UPSERT, absolute writes, conditional transitions), (2) add idempotency keys if you control the client, (3) use content fingerprinting if you don't.
+
+- **The hard part isn't the happy path.** It's concurrent retries, replica lag on dedup reads, side effects that fire before the key is stored, and keys that expire before late retries arrive.
+
+- **INSERT ON CONFLICT is your best friend.** It atomically handles the check-and-act in one query. No race window. Let the database do the serialization.
+
+- **Test concurrency, not just sequence.** Ten simultaneous requests with the same key should produce exactly one side effect. This is the test most teams skip.
+
+---
+
+## Further Reading
+
+**Start here:**
+
+- [Exactly-Once Is a Lie (Sort Of)](/writing/exactly-once-is-a-lie) — my previous post on the theoretical framework. Covers the three levels of "exactly-once" and the platform landscape (Kafka, SQS, Pub/Sub). Read this for the "why"; read this post for the "how."
+
+- [Designing Robust and Predictable APIs with Idempotency](https://stripe.com/blog/idempotency) (Stripe Engineering) — Stripe's own post on why they built idempotency into their API. Good for the product/API design perspective.
+
+**Go deeper:**
+
+- [Implementing Stripe-like Idempotency Keys in Postgres](https://brandur.org/idempotency-keys) by Brandur Leach — the canonical implementation guide. Full state machine, atomic phases, reaper process. If you build one thing after reading this post, build Brandur's version.
+
+- [Idempotence Is Not a Medical Condition](https://queue.acm.org/detail.cfm?id=2187821) by Pat Helland (ACM Queue, 2012) — the academic foundation. Dense but rewarding. His distinction between natural and designed idempotence is the framework this post builds on.
+
+- [The Idempotency-Key HTTP Header Field](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header) (IETF Draft) — the emerging standard for the Idempotency-Key header. If you're designing a new API, follow this spec.
+
+- [Avoiding Double Payments in a Distributed Payments System](https://medium.com/airbnb-engineering/avoiding-double-payments-in-a-distributed-payments-system-2981f6b070bb) by Jon Chew (Airbnb Engineering) — how Airbnb built a generic idempotency framework. Shows how the patterns in this post apply at scale.

@@ -1,0 +1,404 @@
+---
+title: "Your AI Agent's 'Plugin' Is Just a Markdown File (And That's the Point)"
+subtitle: "How Cursor, Claude Code, and Codex extend their agents -- and why the business strategy matters more than the implementation"
+date: 2026-05-15
+tags: ["ai-agents", "developer-tools", "cursor", "claude-code", "codex", "mcp", "extensibility"]
+readTime: "14 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## You Installed a Plugin. It's a Folder of Markdown Files.
+
+You discover a promising Cursor plugin that claims to supercharge your code review workflow. You install it. Then you peek inside, curious what kind of code makes it work.
+
+It's a folder. Inside that folder: markdown files. A `SKILL.md` that reads like a very detailed instruction manual. A `hooks.json` with three lines of shell commands. Maybe a pointer to an MCP server. That's it. No TypeScript. No compiled binary. No runtime. Just prose.
+
+If you've built VS Code extensions or IntelliJ plugins, this feels wrong. Where's the code? Where's the API surface? Where's the package that actually *does* something?
+
+That confusion is the starting point for understanding how AI coding agents actually extend their capabilities, and why the answer looks nothing like traditional plugin architectures.
+
+<Callout type="takeaway">
+
+AI agent plugins aren't code that extends software. They're structured context that shapes what an LLM knows, what it can reach, and what guardrails it operates within.
+
+</Callout>
+
+## Traditional Plugins vs. Agent Plugins: Different Species
+
+A VS Code extension is code. It registers commands, manipulates the editor API, renders custom UI, and runs in a sandboxed extension host process. The extension *is* the feature. Remove it, and the capability disappears because the logic lived in the extension's code.
+
+An AI agent plugin is context. It doesn't contain the logic for code review or deployment or testing. The LLM already has those capabilities baked into its weights. What the plugin provides is: which *specific* code review approach to use for *this* project, what *specific* tools the agent can call, and what *specific* guardrails to enforce. The model is the runtime. The plugin is the configuration.
+
+<Callout type="definition">
+
+**Agent plugin**: a bundle of structured context (instructions, tool connections, lifecycle hooks, and agent definitions) that shapes how an LLM-powered coding agent behaves within a specific project or workflow. Unlike traditional software plugins, the logic lives in the model's weights, not in the plugin's code.
+
+</Callout>
+
+It's the opposite of what we're used to. Traditional plugins add capabilities to dumb software. Agent plugins constrain and direct capabilities that already exist in smart software.
+
+The analogy that maps closest: a plugin is less like a VS Code extension and more like a detailed onboarding document for a new hire who's already a senior engineer. You're not teaching them to code. You're teaching them how *your team* codes.
+
+<Mermaid
+  caption="How traditional plugins and agent plugins create value through opposite mechanisms."
+  chart={`graph LR
+    A["Traditional\nPlugin"] -->|"adds"| B["New capability\nto dumb software"]
+    C["Agent\nPlugin"] -->|"shapes"| D["Existing capability\nin smart software"]
+    A -.- E["Code is\nthe feature"]
+    C -.- F["Context is\nthe feature"]`}
+/>
+
+<Callout type="takeaway">
+
+Agent plugins don't add capabilities to the model. They shape capabilities the model already has. The model is the runtime; the plugin is the configuration.
+
+</Callout>
+
+## The Four Layers of Agent Extension
+
+Every AI coding agent -- Cursor, Claude Code, Codex -- extends through the same four layers, even if they name them differently. Understanding these layers matters more than memorizing any single platform's terminology.
+
+**Layer 1: Configuration (always-on context).** Static rules loaded into every conversation. "Use TypeScript strict mode." "Never import from internal/." "Run `pnpm test` before committing." This is the baseline: cheap to load, always present, shapes every interaction.
+
+**Layer 2: Skills (on-demand context).** Dynamic instructions loaded only when relevant. A deploy skill, a code review workflow, a database migration checklist. Skills are heavier than rules but only consume context when the agent (or user) decides they're needed.
+
+**Layer 3: Tool connections (executable capabilities).** MCP servers, app integrations, browser automation. This is the only layer that runs actual code -- a server process that the agent calls via JSON-RPC. Reading from a database, posting to Slack, querying a monitoring dashboard.
+
+**Layer 4: Lifecycle hooks (enforcement and automation).** Shell commands or HTTP calls that fire on agent events -- before a file write, after a tool call, when a session starts. Hooks are the guardrails: auto-format on save, block force-pushes, notify a dashboard when the agent finishes.
+
+A "plugin" is a bundle of components from these four layers, packaged for distribution.
+
+<Mermaid
+  caption="The four layers of agent extension. Only Layer 3 runs actual code."
+  chart={`graph LR
+    A["Plugin\n(distribution bundle)"] --> B["Layer 1:\nConfiguration\n(always-on rules)"]
+    A --> C["Layer 2:\nSkills\n(on-demand context)"]
+    A --> D["Layer 3:\nTool Connections\n(MCP servers)"]
+    A --> E["Layer 4:\nLifecycle Hooks\n(enforcement)"]
+    B -.- B1["Markdown files\nloaded every session"]
+    C -.- C1["Markdown files\nloaded when relevant"]
+    D -.- D1["Running processes\ncalled via JSON-RPC"]
+    E -.- E1["Shell commands\nfired on events"]`}
+/>
+
+<Callout type="in-practice">
+
+Most plugins are Layer 1 + Layer 2 only: configuration and skills. They're literally just folders of markdown files. The more sophisticated plugins add MCP servers (Layer 3) and hooks (Layer 4), but many useful plugins ship zero executable code.
+
+</Callout>
+
+<Details title="Why markdown, not code?">
+
+The reason plugins are markdown-heavy is economic. An MCP server or a lifecycle hook needs to be maintained, tested, and secured as actual software. A skill file is just instructions -- it's as maintainable as a README. For most extension use cases (teaching the agent your team's conventions, workflows, and preferences), structured prose is the right abstraction. You're not extending a dumb runtime; you're briefing a smart one.
+
+</Details>
+
+## How Each Platform Implements the Four Layers
+
+All three platforms implement the same four layers, but with meaningfully different design choices. The differences reveal what each company optimizes for.
+
+| Layer | Cursor | Claude Code | Codex |
+|---|---|---|---|
+| Configuration | `.cursor/rules/*.mdc` with glob scoping + AGENTS.md support | `CLAUDE.md` with 3-level hierarchy (global/project/directory) | `AGENTS.md` with directory walk from git root to cwd |
+| Skills | `SKILL.md` in `.cursor/skills/` with agent-driven discovery | `SKILL.md` in `.claude/skills/` with `/slash-command` invocation | `SKILL.md` in `skills/` directories, discoverable via `/plugins` |
+| Tool connections | MCP servers via `.cursor/mcp.json` | MCP servers via `.claude/settings.json` | MCP servers via Codex Apps + native OpenAI function calling |
+| Lifecycle hooks | Cursor hooks (`hooks/`) with event automation | 29 hook event types (`PreToolUse`, `PostToolUse`, etc.) with command/HTTP/MCP/prompt actions | Plugin-bundled hooks (as of v0.130.0) |
+| Plugin packaging | `.cursor-plugin/plugin.json` manifest, Git repos | `.claude-plugin/plugin.json` manifest, Git repos | `.codex-plugin/plugin.json` manifest, Git repos |
+| Marketplace | Official Cursor Marketplace (curated) + cursor.directory (community) | Official Anthropic marketplace + custom Git-hosted marketplaces | Plugin Directory in Codex App + `openai/plugins` repo + custom marketplaces |
+
+<Callout type="takeaway">
+
+Cursor optimizes for discoverability and marketplace velocity. Claude Code optimizes for programmable governance and enforcement. Codex optimizes for openness and shell-native composition.
+
+</Callout>
+
+## Configuration Files: The Standards War Nobody's Winning
+
+The configuration layer is where the platforms diverge most visibly. Each tool reads its own file format, and despite years of "convergence" talk, we've landed on coexistence, not unification.
+
+**CLAUDE.md** is the most feature-rich. Three-level scoping (user, project, directory), glob-based rule files in `.claude/rules/`, hooks, permission allow/deny lists, on-demand skills, and subagent definitions. If you need enforcement (not just instructions), CLAUDE.md is the only option with native hook support for blocking destructive actions.
+
+**AGENTS.md** is the open standard play. Created by OpenAI in August 2025, donated to the Linux Foundation's Agentic AI Foundation that December, now backed by Anthropic, Google, Microsoft, and AWS as platinum members. The GitHub repo has 20,000+ stars and growing adoption across open-source projects. The format is intentionally simple: markdown with sections for instructions and conventions. The bet is that a shared baseline every tool reads is more valuable than a rich format only one tool understands.
+
+**.cursor/rules/*.mdc** is Cursor's answer. MDC files (markdown with YAML frontmatter) support `alwaysApply` flags and glob patterns for scoping rules to specific file types. The older `.cursorrules` file still works but is deprecated. Cursor also reads AGENTS.md, hedging toward the open standard while keeping its own format for richer features.
+
+The practical reality for teams using multiple tools: maintain AGENTS.md as the shared baseline, then add tool-specific files for features that only that tool supports. The config files don't conflict -- each tool reads only its own format.
+
+<Mermaid
+  caption="Configuration files by platform. AGENTS.md is the cross-tool baseline; CLAUDE.md and .cursor/rules/ add platform-specific capabilities."
+  chart={`graph LR
+    A["AGENTS.md\n(open standard)"] -->|"read by"| B["Codex"]
+    A -->|"read by"| C["Cursor"]
+    A -->|"read by"| D["Others"]
+    E["CLAUDE.md\n(richest features)"] -->|"read by"| F["Claude Code"]
+    G[".cursor/rules/\n(glob scoping)"] -->|"read by"| C`}
+/>
+
+<Callout type="gotcha">
+
+CLAUDE.md is loaded into every conversation turn, consuming tokens. A bloated 500+ line CLAUDE.md costs real money over thousands of sessions. The recommended pattern: keep CLAUDE.md under 500 lines and move detailed instructions into on-demand skills that load only when relevant.
+
+</Callout>
+
+<Details title="Feature comparison: which config file supports what">
+
+| Feature | CLAUDE.md | .cursor/rules/ | AGENTS.md |
+|---|---|---|---|
+| Per-directory nesting | Yes | Yes (via globs) | Proposed |
+| Global user config | `~/.claude/CLAUDE.md` | Settings only | No |
+| Glob-based scoping | Via `.claude/rules/` | `alwaysApply` + globs | No |
+| Lifecycle hooks | 29 event types | Via `hooks/` directory | No |
+| Permission controls | Allow/deny lists | No | No |
+| Skills loading | `.claude/skills/` | `.cursor/skills/` | No |
+| Subagent definitions | `.claude/agents/` | No | No |
+| MCP config | `.claude/settings.json` | `.cursor/mcp.json` | No |
+
+</Details>
+
+---
+
+<Mermaid
+  caption="Anatomy of an AI agent plugin. Dashed lines are context injection (markdown to LLM). Solid lines are executable (code that actually runs)."
+  chart={`graph LR
+    subgraph "What a plugin actually contains"
+      A["SKILL.md\n(instructions)"] -.-> M["LLM Context\nWindow"]
+      B["rules/*.mdc\n(conventions)"] -.-> M
+      C["hooks.json\n(lifecycle)"] --> S["Shell / HTTP"]
+      D["mcp.json\n(tools)"] --> T["MCP Server\nProcess"]
+      E["agents/*.md\n(subagents)"] -.-> M
+    end
+    T -->|"JSON-RPC"| M
+    S -->|"stdout/exit code"| M`}
+/>
+
+## MCP: The Layer Everyone Agreed On
+
+Model Context Protocol is the one piece of the plugin stack where all three platforms genuinely converged. An MCP server you build for Cursor works in Claude Code and Codex with minor config changes. This matters.
+
+MCP follows a client-host-server architecture inspired by the Language Server Protocol (LSP). The AI application (Cursor, Claude Code, Codex) is the host. It creates client connections to MCP servers, which are separate processes that expose tools, resources, and prompts via JSON-RPC 2.0.
+
+Servers expose three primitives: **tools** (executable functions the model can call), **resources** (read-only data the application can attach to context), and **prompts** (user-controlled templates). In practice, most MCP servers are tool-heavy -- a Postgres MCP server exposes query tools, a Slack MCP server exposes message-sending tools, a browser MCP server exposes navigation and interaction tools.
+
+The protocol was created by Anthropic, open-sourced, and then donated to the Linux Foundation's Agentic AI Foundation in late 2025. The Foundation is co-founded by Anthropic, Block, and OpenAI -- direct competitors agreeing that a shared tool integration standard serves everyone. Google, Microsoft, AWS, and Cloudflare are platinum members.
+
+As of mid-2026: over 10,000 active public MCP servers, 97 million+ monthly SDK downloads, and native support in ChatGPT, Cursor, Claude Code, Codex, Gemini, VS Code, and GitHub Copilot.
+
+<Mermaid
+  caption="MCP architecture. Each host creates isolated client connections to server processes. The same server works across all three platforms."
+  chart={`graph LR
+    subgraph "Host (AI Application)"
+      H["Cursor / Claude Code\n/ Codex"] --> C1["MCP Client 1"]
+      H --> C2["MCP Client 2"]
+      H --> C3["MCP Client 3"]
+    end
+    C1 -->|"JSON-RPC 2.0"| S1["Postgres\nMCP Server"]
+    C2 -->|"JSON-RPC 2.0"| S2["Slack\nMCP Server"]
+    C3 -->|"JSON-RPC 2.0"| S3["Browser\nMCP Server"]
+    S1 -.- T1["tools: query,\nexecute, schema"]
+    S2 -.- T2["tools: send_message,\nlist_channels"]
+    S3 -.- T3["tools: navigate,\nclick, screenshot"]`}
+/>
+
+<Callout type="in-practice">
+
+The config difference between platforms is minimal. Cursor uses `.cursor/mcp.json`, Claude Code uses `.claude/settings.json`, and Codex uses its app config. The server process itself is identical. If you're building a custom integration, build it as an MCP server and it works everywhere.
+
+</Callout>
+
+## Lifecycle Hooks: Where Claude Code Pulls Ahead
+
+Hooks are the enforcement mechanism -- the difference between "please don't force-push" and "you literally cannot force-push." This is where the platforms diverge most meaningfully.
+
+**Claude Code** has the most mature hook system by a wide margin. 29 distinct event types covering the full session lifecycle: before and after tool calls (`PreToolUse`, `PostToolUse`), permission requests, subagent spawning, context compaction, file changes, config changes, and session start/end. Three of these events can actually block actions: `PreToolUse`, `PermissionRequest`, and `ConfigChange`. A `PreToolUse` hook that exits with code 2 stops the tool call from executing.
+
+Hooks support four action types: shell commands, HTTP POST requests, MCP tool calls, and LLM prompts. A team can write a hook that runs `eslint --fix` after every file edit, blocks any shell command containing `rm -rf /`, posts tool call metadata to an audit SIEM, or asks an LLM to evaluate whether a code change looks safe.
+
+**Cursor** added hooks support through its plugin system, with event-based automation scripts. The hook system is newer and less granular than Claude Code's, but covers the core use cases of post-edit formatting and pre-commit validation.
+
+**Codex** takes a different approach entirely. Instead of application-layer hooks, Codex enforces safety at the OS kernel layer -- Seatbelt on macOS, Landlock + seccomp on Linux. The agent gets a kernel-enforced sandbox: it literally cannot reach files or network endpoints outside its allowed scope, regardless of what the model tries. This is a harder guarantee than hooks can provide, but it's less programmable. You can't write a Codex kernel policy that says "run the formatter after edits" -- that's not what kernel sandboxing does.
+
+The trade-off is clear: Claude Code gives you programmable governance (write any policy as code), Codex gives you hard isolation (the kernel says no), and Cursor sits in between.
+
+<Mermaid
+  caption="How each platform handles agent guardrails. Claude Code uses programmable hooks, Codex uses kernel sandboxing, Cursor uses editor-level permissions."
+  chart={`graph LR
+    A["Agent action\n(e.g. write file)"] --> B{"Platform?"}
+    B -->|"Claude Code"| C["PreToolUse hook\n(can block, modify,\nlog, or allow)"]
+    B -->|"Codex"| D["Kernel sandbox\n(allowed or\nsyscall denied)"]
+    B -->|"Cursor"| E["Permission prompt\n+ plugin hooks"]
+    C --> F["Flexible policy\n(any shell/HTTP/LLM)"]
+    D --> G["Hard boundary\n(kernel-enforced)"]
+    E --> H["Editor-level\ntrust model"]`}
+/>
+
+<Callout type="gotcha">
+
+Claude Code hooks are application-layer, not kernel-layer. A sufficiently determined model could theoretically find a path around an application hook. Codex's kernel sandbox is harder to escape but less flexible. For regulated industries or untrusted code review, kernel-level isolation (Codex) is the stronger guarantee.
+
+</Callout>
+
+<Details title="Claude Code hook event types (full list, 29 events)">
+
+| Category | Events |
+|---|---|
+| Session lifecycle | `SessionStart`, `SessionEnd`, `Setup` |
+| User input | `UserPromptSubmit`, `UserPromptExpansion` |
+| Tool execution | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch` |
+| Permissions | `PermissionRequest`, `PermissionDenied` |
+| Subagents | `SubagentStart`, `SubagentStop` |
+| Tasks | `TaskCreated`, `TaskCompleted` |
+| Notifications | `Notification` |
+| Context | `PreCompact`, `PostCompact`, `InstructionsLoaded` |
+| Config | `ConfigChange`, `CwdChanged` |
+| Files | `FileChanged` |
+| Worktrees | `WorktreeCreate`, `WorktreeRemove` |
+| MCP | `Elicitation`, `ElicitationResult` |
+| Turn end | `Stop`, `StopFailure` |
+| Teams | `TeammateIdle` |
+
+Three events can block actions: `PreToolUse`, `PermissionRequest`, and `ConfigChange`. A hook returning exit code 2 stops the action.
+
+</Details>
+
+## The Plugin Distribution Game
+
+How plugins get from creator to user reveals each company's platform strategy. The distribution model is where business decisions become most visible.
+
+**Cursor** has the most polished marketplace experience. The official Cursor Marketplace at cursor.com/marketplace features curated, manually-reviewed plugins browseable from within the editor. One-click install. There's also cursor.directory, a community-driven platform with 79,000+ developers. Enterprise and Teams plans get private team marketplaces where plugins can be marked as required (auto-installed for all team members) or optional. This is the App Store model applied to AI agent extensions.
+
+**Claude Code** takes the developer-tools approach. The official Anthropic marketplace ships automatically with Claude Code and includes code intelligence plugins for multiple languages. But the real power is custom marketplaces: any Git repository can host a `marketplace.json` catalog. Teams create private marketplaces, share them via `/plugin marketplace add owner/repo`, and control distribution internally. Over 9,000 community plugins are in active use. This is the package registry model: npm for agent extensions.
+
+**Codex** leans into openness. Codex itself is open-source (Apache 2.0), the plugin system is built on standard MCP servers, and there's no marketplace gate. The `openai/plugins` GitHub repo provides curated examples. Custom marketplaces work via `marketplace.json` at repo or personal scope, addable via `codex plugin marketplace add`. The model: open ecosystem, curated examples, bring your own distribution.
+
+All three use nearly identical packaging: a plugin manifest (`plugin.json` in a `.{tool}-plugin/` directory) and Git repositories as the distribution unit. The plugin format is converging even as the marketplace strategies diverge.
+
+<Callout type="in-practice">
+
+The plugin manifest formats across all three are nearly identical: a JSON file with name, version, description, and paths to skills, hooks, MCP servers, and agents. If you've built a plugin for one, porting it to the others is a half-hour job of adjusting paths and config keys. The distribution channel is the real differentiator, not the format.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Cursor runs an App Store (curated, one-click, enterprise controls). Claude Code runs a package registry (Git-hosted, team marketplaces, 9,000+ community plugins). Codex runs an open bazaar (Apache 2.0, no gate, bring your own marketplace).
+
+</Callout>
+
+## The Business Strategy Behind Each Approach
+
+The plugin architectures aren't just technical decisions. They're business strategies, and reading them as such explains choices that seem arbitrary from a purely technical lens.
+
+**Cursor's bet: the IDE is the moat.** Cursor forked VS Code because the VS Code extension API couldn't support what agents need -- multi-pane orchestration, whole-project indexing alongside editor state, custom multi-file diff UIs. The marketplace is central to this strategy: every plugin installed in Cursor is a plugin that doesn't work in VS Code, Claude Code, or Codex. At $2.7B ARR (April 2026) with 60% enterprise revenue, Cursor's lock-in is working. The risk: usage-based pricing caused user backlash in 2025, and the marketplace's quality bar varies enough that "install a plugin" can mean anything from a battle-tested workflow to someone's weekend experiment.
+
+**Anthropic's bet: own the protocol, not the product.** By donating MCP to the Linux Foundation and making the best implementation rather than the only one, Anthropic plays the long game. Claude Code's hook system is the richest governance layer in the ecosystem -- the enterprise-grade choice for teams that need audit trails and policy enforcement. The 9,000+ plugin ecosystem and custom marketplace infrastructure target teams that want control over their toolchain. Community registries already list 11,000+ plugins. The strategy: make Claude Code the tool serious engineering organizations choose, and let MCP adoption drive awareness of Anthropic's models across every other platform.
+
+**OpenAI's bet: distribution beats features.** Codex ships inside ChatGPT, which has hundreds of millions of users. OpenAI doesn't need to win the plugin ecosystem -- they need the ecosystem to not matter for lock-in. By supporting AGENTS.md (the open standard), making Codex open-source, and keeping the plugin system simple, OpenAI reduces switching costs. The bet: if you can try Codex from the ChatGPT interface you already pay for, feature parity with competitors is less important than distribution advantage. Codex's kernel-level sandboxing also gives it a unique answer to enterprise security requirements that neither Cursor nor Claude Code can match today.
+
+<Callout type="gotcha">
+
+The "open standard" moves from OpenAI (AGENTS.md) and Anthropic (MCP) are strategic, not charitable. Open standards drive adoption of the underlying models. Anthropic benefits when every MCP server developer tests against Claude first. OpenAI benefits when every AGENTS.md author writes instructions tuned for GPT models. The standard is open; the model revenue it drives is not.
+
+</Callout>
+
+<Details title="The MCP donation timeline and strategic context">
+
+**November 2024:** Anthropic launches MCP as an open-source protocol.
+
+**Early 2025:** MCP gains traction with developer tools; ChatGPT, Cursor, and VS Code add support.
+
+**August 2025:** OpenAI creates AGENTS.md as an open config standard.
+
+**December 2025:** Anthropic donates MCP to the Linux Foundation's new Agentic AI Foundation. Co-founders: Anthropic, Block, and OpenAI. Platinum members include Google, Microsoft, AWS, and Cloudflare.
+
+**Mid-2026:** 10,000+ active MCP servers, 97M+ monthly SDK downloads.
+
+This follows the same playbook as Bluetooth SIG and USB-IF: the company that defines the standard gets cited in every implementation's documentation. Anthropic's name is on every MCP server's SDK and docs. That's brand awareness money can't buy.
+
+</Details>
+
+## What Actually Locks You In
+
+Not all layers create equal lock-in. Understanding which parts are portable and which are platform-specific helps you make informed decisions about where to invest your customization effort.
+
+<Mermaid
+  caption="Lock-in spectrum. MCP and AGENTS.md are the most portable. Platform-specific features (hooks, sandboxing, marketplace) create the deepest lock-in."
+  chart={`graph LR
+    subgraph "Portable (low lock-in)"
+      A["MCP servers\n(cross-platform)"]
+      B["AGENTS.md\n(open standard)"]
+      C["SKILL.md format\n(similar across tools)"]
+    end
+    subgraph "Partially portable"
+      D["Configuration files\n(CLAUDE.md / .cursorrules)"]
+      E["Plugin manifest\n(similar JSON format)"]
+    end
+    subgraph "Platform-locked"
+      F["Cursor Marketplace\nplugins"]
+      G["Claude Code hooks\n(29 event types)"]
+      H["Codex kernel\nsandbox profiles"]
+      I["Cursor Background\nAgents / Canvases"]
+    end`}
+/>
+
+| Extension Layer | Portability | Lock-in Risk |
+|---|---|---|
+| MCP servers | High -- works across all platforms with config changes | Low |
+| AGENTS.md / config files | Medium -- shared baseline works everywhere, tool-specific features don't | Low-medium |
+| SKILL.md skills | Medium -- format is similar but discovery and invocation differ | Medium |
+| Plugin bundles | Medium -- manifest format is converging but marketplace distribution is siloed | Medium |
+| Lifecycle hooks | Low -- Claude Code's 29 events have no equivalent in Codex or Cursor | High |
+| Sandbox profiles | Low -- Codex kernel profiles are Codex-only | High |
+| IDE features | None -- Background Agents, Canvases, Routines are platform-exclusive | Very high |
+
+<Callout type="takeaway">
+
+MCP servers and AGENTS.md are genuinely portable. Skills are mostly portable (similar `SKILL.md` format). Hooks, sandbox profiles, and marketplace-specific features lock you in.
+
+</Callout>
+
+## Where This Is Headed
+
+Three trends are shaping the next year of AI agent extensibility.
+
+**Convergence at the bottom, divergence at the top.** MCP is settled as the shared tool integration layer. AGENTS.md is gaining traction as the shared config baseline. But the high-value features -- hooks, sandboxing, subagent orchestration, marketplace curation -- are where platforms differentiate, and nobody has incentive to standardize those.
+
+**Plugins become the new lock-in.** As the models themselves become more commoditized (all three platforms support multiple frontier models), the plugin ecosystem becomes the switching cost. A team with 15 Cursor plugins, 8 Claude Code hooks, and 4 custom MCP servers wired into their CI/CD pipeline doesn't switch tools easily. This is deliberate. The platforms learned from the VS Code extension ecosystem: it's not the editor that locks you in, it's the extensions you've invested in.
+
+**Skills eat everything.** The SKILL.md format -- a markdown file that teaches the agent how to do a complex multi-step task -- is the fastest-growing extension type across all three platforms. Skills are cheap to write, easy to share, and disproportionately useful because they encode expert workflows as structured context. A good skill file turns a generic agent into one that works the way your best engineer does.
+
+<Callout type="takeaway">
+
+MCP and AGENTS.md are converging as shared infrastructure. Platform-specific features (hooks, sandboxing, orchestration) are where differentiation and lock-in live. Skills are the fastest-growing extension type and the cheapest way to get real value from these tools.
+
+</Callout>
+
+## What to Remember
+
+- **Agent plugins are context, not code.** They shape what the model knows and what it can reach. The model is the runtime; the plugin is the onboarding doc.
+
+- **Four layers: config, skills, tools, hooks.** Only tool connections (MCP servers) run actual code. Everything else is structured markdown.
+
+- **MCP is the one portable layer.** Build integrations as MCP servers and they work everywhere. The protocol is governed by the Linux Foundation with backing from all major AI companies.
+
+- **Configuration files coexist, they don't converge.** Use AGENTS.md as the shared baseline, then add CLAUDE.md or `.cursor/rules/` for platform-specific features.
+
+- **Business strategy explains the architecture.** Cursor locks you in through the marketplace. Anthropic locks you in through governance features (hooks, subagents). OpenAI reduces lock-in to win on distribution. Read the incentives, not the marketing.
+
+**If you're choosing where to invest plugin development effort:**
+
+- Build integrations as MCP servers (portable)
+- Write team conventions in AGENTS.md (portable)
+- Write workflows as SKILL.md files (mostly portable)
+- Accept that hooks, sandbox profiles, and marketplace-specific features lock you into a platform, and choose that platform deliberately
+
+### Further Reading
+
+- [MCP Specification](https://modelcontextprotocol.io/specification/latest) -- The protocol spec itself. If you're building integrations, read the architecture and tools sections first.
+- [AI Agent Config Files Compared (amux.io)](https://amux.io/guides/agent-config-files-compared/) -- The best single-page comparison of CLAUDE.md, .cursorrules, AGENTS.md, and every other config format. Includes a unified repo setup guide.
+- [Codex CLI vs Claude Code vs Cursor Architecture Deep-Dive (AI Catchup)](https://aicatchup.com/comparisons/codex-cli-vs-claude-code-vs-cursor-architecture) -- Covers sandboxing, composition, and pricing in more detail than this post. Read if you're making a platform decision for your team.
+- [Why Anthropic Bet Everything on MCP (Angry Shark Studio)](https://www.angry-shark-studio.com/blog/anthropic-mcp-strategy-open-standard-decision/) -- The strategic analysis of Anthropic's decision to donate MCP to the Linux Foundation. Explains the business logic behind open-sourcing a competitive advantage.
+- [The IDE Plugin Is the Product Now (Tian Pan)](https://tianpan.co/blog/2026-05-02-ide-plugin-is-the-product-coding-agent-outgrows-editor-api) -- Argues that the traditional plugin model fundamentally breaks when agents become the primary actor. Explains why Cursor, Windsurf, and Zed forked their editors.
+- [Claude Code Plugins Reference](https://code.claude.com/docs/en/plugins-reference) -- The most detailed plugin technical reference of the three platforms. Worth reading for the hook event taxonomy alone.
