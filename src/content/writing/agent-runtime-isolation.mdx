@@ -1,0 +1,496 @@
+---
+title: "Your Agent Runs Code You Didn't Write: A Field Guide to Runtime Isolation"
+subtitle: "Containers, microVMs, OS sandboxes, and WASM — what each actually enforces at the kernel level, and a decision tree for choosing the right one"
+date: 2026-05-22
+tags: ["ai-agents", "security", "sandboxing", "containers", "microvm", "firecracker", "gvisor", "wasm"]
+readTime: "16 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## You Typed --dangerously-skip-permissions. Then What?
+
+You're using Codex CLI. You've typed the magic incantation: `codex --dangerously-skip-permissions`. Or maybe it was `claude --dangerously-skip-permissions`. Or you're running `amp --dangerously-allow-all`. The flag names vary; the meaning is the same: you've told the agent to stop asking for permission before running commands.
+
+The agent writes code, installs packages, runs tests. Fast. Productive. Then it decides to "clean up temporary files" and runs something that reaches outside your project directory. Or an MCP server's tool description contains a hidden instruction that makes the agent `curl` your SSH keys to an external endpoint. Or a poisoned `.cursorrules` file in a cloned repo triggers a shell command before you even see the trust dialog.
+
+You've read about these attacks. You know sandboxing is part of the answer. But which kind? The ecosystem has at least five distinct isolation technologies that all claim to solve this problem, and they enforce fundamentally different boundaries. A macOS Seatbelt profile and a Firecracker microVM are as different as a bike lock and a bank vault -- and the right choice depends on what you're protecting against, not which one is "strongest."
+
+This post covers the full isolation spectrum. For each layer, I'll explain what it actually enforces at the kernel level, what it doesn't protect against, where real agents already use it, and the performance cost. At the end, a decision tree for choosing the right level for your threat model.
+
+## What You Probably Believe About Sandboxing
+
+Before we tour the technologies, let's address the beliefs that lead to either false confidence or unnecessary paranoia.
+
+<Callout type="definition">
+
+**Runtime isolation** -- constraining what an executing process can access (files, network, syscalls, memory) at the OS or hardware level, independent of what the process intends to do. Unlike permission prompts, runtime isolation is enforced by the kernel or hypervisor -- the process cannot opt out.
+
+</Callout>
+
+| Common Belief | Reality | Why It Matters |
+|---|---|---|
+| Docker containers isolate agents securely | Containers share the host kernel. Three runc escape CVEs (CVSS 7.3) were [disclosed in November 2025](https://github.com/opencontainers/runc/security/advisories/GHSA-cgrx-mc8f-2prm) alone. A single kernel vulnerability compromises all containers on a host. | You're running untrusted, LLM-generated code with the same kernel isolation you'd use for your trusted microservices. |
+| Sandboxing prevents prompt injection attacks | The most dangerous agent attacks (tool poisoning, cross-server exfiltration) travel through the LLM's context window, not through code execution. No runtime sandbox intercepts attention-layer instructions. | You sandbox every process perfectly and still get compromised through the context window. Sandboxing limits blast radius, not attack surface. |
+| A stronger sandbox is always better | A Firecracker microVM boots in ~125ms with ~128MB RAM. For a developer running a coding agent locally, that's overkill -- an OS-level sandbox (near-zero overhead) provides sufficient containment. | Over-engineering isolation wastes resources and encourages developers to bypass it entirely. |
+| WASM sandboxes can replace containers | WASM/WASI achieves sub-5ms cold starts but only supports languages compiled to Wasm. You can't run arbitrary Python, shell scripts, or `pip install` inside a WASM sandbox. | The fastest isolation only works for a narrow set of pre-compiled tools. |
+
+<Callout type="takeaway">
+
+Sandboxing is neither a silver bullet nor a waste of time. It's a blast-radius limiter that works best when you know exactly which boundary it enforces and which attacks travel above it.
+
+</Callout>
+
+## The Isolation Spectrum
+
+Every isolation technology makes a different trade-off between two axes: how strong the boundary is and how much it costs (boot time, memory, compatibility limitations).
+
+The spectrum isn't a ranking -- it's a menu. Each layer exists because the one above it is too expensive for some use case and the one below it is too weak for another.
+
+Here's the full picture, from lightest touch to hardest boundary.
+
+<Mermaid
+  caption="The isolation spectrum for AI agents. WASM sits outside the linear progression because it trades language support for near-zero overhead. Boot time and memory are approximate baseline costs."
+  chart={`graph LR
+    A["OS-Level\nSandbox\n~0ms, ~0MB"] --> B["Container\n(runc)\n~50ms, ~10MB"]
+    B --> C["gVisor\n~100ms, ~30MB"]
+    C --> D["MicroVM\n~125ms, ~128MB"]
+    D --> E["WASM/V8\nIsolate\n~5ms, ~2MB"]
+
+    A -.- A1["Enforces:\nfile access policy\n(kernel-level)"]
+    B -.- B1["Enforces:\nnamespace +\ncgroup isolation"]
+    C -.- C1["Enforces:\nsyscall interception\n(user-space kernel)"]
+    D -.- D1["Enforces:\nown kernel via\nhardware virtualization"]
+    E -.- E1["Enforces:\ncapability-based\nmemory sandbox"]`}
+/>
+
+<Callout type="takeaway">
+
+There's no "best" isolation, only the one that fits your threat model. OS sandboxes are free but thin. MicroVMs are strong but heavy. Most developers need something in between.
+
+</Callout>
+
+## OS-Level Sandboxes: The Lightest Fence
+
+OS-level sandboxes restrict a process's access to the filesystem, network, and syscalls using the OS's built-in security framework. They add near-zero overhead because there's no virtualization, no extra kernel, no container runtime -- just a policy file that the existing kernel enforces.
+
+**On macOS: Seatbelt (sandbox-exec)**
+
+Apple's Seatbelt framework lets you define a policy profile that the kernel enforces at the syscall level. A sandboxed process literally cannot open a file outside the allowed paths -- the syscall returns `EPERM` before the filesystem is touched.
+
+[Agent Safehouse](https://agent-safehouse.dev/) wraps this into a single command. You run `safehouse claude --dangerously-skip-permissions` and the agent gets read/write access to your project directory, read-only access to installed toolchains, and nothing else. Try `cat ~/.ssh/id_ed25519` inside the sandbox -- the kernel blocks it before the process sees the data.
+
+OpenAI's [Codex CLI](https://developers.openai.com/codex/concepts/sandboxing) uses the same mechanism. Its `workspace-write` sandbox mode applies a Seatbelt profile that restricts filesystem access to the working directory and disables network by default.
+
+**On Linux: bubblewrap + Landlock**
+
+bubblewrap (`bwrap`) creates a minimal user namespace with read-only bind mounts for system directories and read-write access only for the project. [ai-jail](https://github.com/akitaonrails/ai-jail) layers additional protections on top: Landlock LSM filesystem controls, seccomp syscall filtering, and sensitive `/sys` path masking.
+
+Codex CLI on Linux uses a combination of bubblewrap and Landlock for the same deny-first model.
+
+**What this catches:** An agent that tries to read your SSH keys, modify files in other repositories, delete system files, or write to your home directory outside the project.
+
+**What this doesn't catch:** An agent that exfiltrates data through the network (unless network is also sandboxed), a malicious process that exploits a kernel vulnerability to escape the sandbox, or any attack that travels through the LLM context window rather than through code execution.
+
+<Callout type="in-practice">
+
+Both Agent Safehouse and Codex CLI offer shell aliases that make sandboxing the default. Add `claude() { safehouse claude --dangerously-skip-permissions "$@"; }` to your `.zshrc` and every session runs sandboxed without changing your workflow. To bypass the sandbox for a specific session, use `command claude`.
+
+</Callout>
+
+<Callout type="gotcha">
+
+Codex CLI on macOS has a known bug where setting `network_access = true` in `config.toml` is silently ignored by the Seatbelt profile. The sandbox unconditionally blocks outbound network, regardless of configuration. The workaround is `codex --sandbox danger-full-access`, which defeats the purpose. Track the issue for a fix before relying on network configuration.
+
+</Callout>
+
+<Callout type="takeaway">
+
+OS-level sandboxes are the right default for local development. Near-zero cost, kernel-enforced, and already built into the agents you're using (Codex, Claude Code via Safehouse). If you're not using one, start here.
+
+</Callout>
+
+<Details title="How macOS Seatbelt enforcement works at the syscall level">
+
+Seatbelt uses the TrustedBSD MAC (Mandatory Access Control) framework built into the XNU kernel. When a sandboxed process makes a syscall (`open`, `connect`, `exec`), the kernel checks the call against the loaded policy profile *before* executing it. The check happens in kernel space -- the process has no opportunity to intercept or modify the decision. This is the same mechanism that enforces App Store sandboxing.
+
+The policy language uses S-expressions that specify allow/deny rules for file operations, network access, process control, and IPC. Agent Safehouse generates these profiles dynamically based on the working directory and detected toolchains.
+
+**Limitation:** `sandbox-exec` is deprecated by Apple (since macOS 10.15) and not officially supported for third-party use. It still works in macOS 15 (Sequoia) and Apple hasn't removed it, but there's no guarantee of future compatibility. Safehouse's FAQ acknowledges this and tracks the status.
+
+</Details>
+
+## Containers: Necessary but Not Sufficient
+
+Standard Docker containers (using the runc runtime) isolate via Linux namespaces (separate PID, network, mount, user views) and cgroups (resource limits). This is the isolation model most developers know. It's also the one that's least appropriate for running untrusted, LLM-generated code.
+
+The core issue: **containers share the host kernel.** Every container on a host makes syscalls to the same kernel. A kernel vulnerability in any container can compromise the host and every other container on it.
+
+This isn't theoretical. In November 2025, [three runc CVEs](https://github.com/opencontainers/runc/security/advisories/GHSA-cgrx-mc8f-2prm) were disclosed simultaneously:
+
+- **CVE-2025-31133:** Replace `/dev/null` with a symlink to procfs files, causing runc to bind-mount them read-write. Full container escape.
+- **CVE-2025-52565:** Race condition on `/dev/console` mount redirecting to sensitive procfs files.
+- **CVE-2025-52881:** LSM bypass via shared mount race conditions, enabling sysctl writes to `/proc/sys/kernel/core_pattern` (arbitrary host code execution).
+
+All three require the ability to start containers with custom mount configurations -- exactly what happens when an AI agent uses Docker-in-Docker to execute generated code.
+
+**When containers still make sense:** For trusted, internally-written agent code where you control the image, the Dockerfile, and the runtime environment. Standard containers are fast (~50ms start), lightweight (~10MB overhead), and have mature tooling. They're fine for packaging your own agent -- just not for running arbitrary code that agent generates.
+
+<Mermaid
+  caption="Containers share the host kernel. A vulnerability exploited from any container affects the host and all other containers."
+  chart={`graph TD
+    subgraph Host["Host OS (shared kernel)"]
+      K["Linux Kernel"]
+      C1["Container A\n(your agent)"]
+      C2["Container B\n(generated code)"]
+      C3["Container C\n(another tenant)"]
+    end
+
+    C1 -->|"syscalls"| K
+    C2 -->|"syscalls"| K
+    C3 -->|"syscalls"| K
+
+    K -.- VULN["Kernel vuln in any\ncontainer's syscall\npath → host compromise"]`}
+/>
+
+<Callout type="gotcha">
+
+Docker-in-Docker (DinD) -- where an agent in a container spawns more containers -- requires `--privileged` mode, which disables most namespace and seccomp protections. The isolation you think you have evaporates the moment the agent needs to build or run containers of its own. [Docker Sandboxes](https://www.docker.com/blog/docker-sandboxes-run-agents-in-yolo-mode-safely) (microVM-based) solve this by giving each sandbox its own Docker Engine.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Containers isolate trusted workloads from each other. They do not isolate the host from untrusted code. For LLM-generated code execution, they're a packaging mechanism, not a security boundary.
+
+</Callout>
+
+---
+
+<Mermaid
+  caption="What each layer adds. The shared-kernel boundary is the key distinction -- everything below microVMs shares it."
+  chart={`graph LR
+    subgraph OS["OS-Level Sandbox"]
+      direction TB
+      OS1["✓ File access policy"]
+      OS2["✗ Shared kernel"]
+      OS3["✗ No process isolation"]
+    end
+    subgraph CT["Container (runc)"]
+      direction TB
+      CT1["✓ Namespace isolation"]
+      CT2["✓ Resource limits"]
+      CT3["✗ Shared kernel"]
+    end
+    subgraph GV["gVisor"]
+      direction TB
+      GV1["✓ Syscall interception"]
+      GV2["✓ User-space kernel"]
+      GV3["~ Shared host kernel\n(reduced surface)"]
+    end
+    subgraph MV["MicroVM"]
+      direction TB
+      MV1["✓ Own kernel"]
+      MV2["✓ Hardware isolation"]
+      MV3["✓ No shared state"]
+    end`}
+/>
+
+## gVisor: The Interceptor Kernel
+
+gVisor sits between containers and microVMs on the isolation spectrum. It runs a user-space kernel (called Sentry) that intercepts every syscall your application makes before it reaches the host kernel.
+
+When a containerized process calls `open()`, normally that goes straight to the host Linux kernel. With gVisor, it goes to Sentry instead. Sentry has its own implementation of the Linux syscall interface -- its own virtual filesystem, its own TCP/IP stack (Netstack), its own memory management. If Sentry absolutely needs the real kernel (for actual disk I/O), it forwards a heavily filtered, restricted version of the request.
+
+The result: even if an attacker finds a vulnerability in a syscall handler, they've compromised the Sentry process, not the host kernel. The host kernel only sees ~70 syscalls from Sentry, down from the ~400 a normal container would expose.
+
+**Performance trade-off:** gVisor adds 10-30% overhead on I/O-heavy workloads (file reads, network) but minimal overhead on compute (CPU-bound code). Boot time is ~100ms, comparable to standard containers.
+
+**Where it's used in practice:** [Modal](https://modal.com) runs their AI code execution sandboxes on gVisor. The Kubernetes [`agent-sandbox` controller](https://kubernetes.io/blog/2026/03/20/running-agents-on-kubernetes-with-agent-sandbox/) (SIG Apps) supports gVisor as a runtime class -- you add `runtimeClassName: gvisor` to your pod spec, and the workload runs inside a Sentry boundary automatically.
+
+**The honest trade-off:** gVisor ultimately still shares the host kernel (Sentry itself runs on it). The attack surface shrinks, but doesn't vanish. For truly untrusted multi-tenant workloads, microVMs provide a harder boundary.
+
+<Mermaid
+  caption="gVisor intercepts all syscalls through Sentry. The host kernel sees a dramatically reduced, filtered syscall surface."
+  chart={`graph TD
+    APP["Agent Code"] -->|"syscall"| SENTRY["Sentry\n(user-space kernel)"]
+    SENTRY -->|"~70 filtered\nsyscalls"| HOST["Host Kernel"]
+    SENTRY -.- FS["Virtual\nFilesystem"]
+    SENTRY -.- NET["Netstack\n(user-space TCP/IP)"]
+
+    APP -.->|"normally\n~400 syscalls"| HOST`}
+/>
+
+<Callout type="in-practice">
+
+To run an agent sandbox on Kubernetes with gVisor, install the gVisor runtime on your nodes, then set `runtimeClassName: gvisor` in your Sandbox manifest. The [`kubernetes-sigs/agent-sandbox`](https://kubernetes.io/blog/2026/03/20/running-agents-on-kubernetes-with-agent-sandbox/) controller handles lifecycle management, scheduled deletion, pause/resume, and persistent storage.
+
+</Callout>
+
+<Callout type="takeaway">
+
+gVisor is the pragmatic middle ground for server-side agent execution. Stronger than containers, lighter than microVMs, and integrates with Kubernetes through a single field. The I/O overhead matters for file-heavy agents but not for compute.
+
+</Callout>
+
+<Details title="gVisor execution modes: Systrap vs KVM">
+
+gVisor supports two execution modes for syscall interception:
+
+**Systrap** (default): Uses seccomp-bpf to trap syscalls. Lower overhead for most workloads but slightly higher latency per syscall.
+
+**KVM mode**: Uses hardware virtualization (KVM) to run Sentry in a lightweight VM. Faster per-syscall overhead but requires KVM support on the host. This mode blurs the line between gVisor and microVMs -- it uses hardware virtualization but still runs the gVisor kernel, not a full Linux kernel.
+
+For AI agent workloads, Systrap is typically sufficient. KVM mode matters most for workloads making millions of syscalls per second (e.g., high-frequency network services).
+
+</Details>
+
+## MicroVMs: Your Agent Gets Its Own Kernel
+
+MicroVMs are the strongest isolation primitive in the spectrum. Each sandbox gets its own Linux kernel running on hardware virtualization (KVM). A compromise inside a microVM -- even a full kernel exploit -- affects only that VM's guest kernel. The host is protected by the hypervisor, which has an attack surface orders of magnitude smaller than a Linux kernel.
+
+**[Firecracker](https://www.usenix.org/conference/nsdi20/presentation/agache)** (open-sourced by AWS in 2018) is the reference implementation. It was designed for Lambda and Fargate -- environments where thousands of untrusted tenants execute arbitrary code on shared hardware. The threat model is identical to AI agents running generated code.
+
+Firecracker boots a microVM in ~125ms (kernel only). Real-world end-to-end times including guest OS init and readiness polling are higher: [NumaVM benchmarked](https://numavm.com/blog/2026-03-10-1-second-boot) 1,133ms cold boot, but snapshot restore brings this down to 176ms. [NeuroVisor](https://github.com/malcolmxsc/neurovisor) pre-warms a pool of Firecracker VMs so agent code execution feels instant despite the per-VM overhead.
+
+Each microVM gets minimal emulated hardware (no USB, no PCI buses, no BIOS) -- just a virtio network device, a virtio block device, and a serial console. This minimal device model is itself a security feature: fewer emulated devices means fewer attack surface targets.
+
+**[Docker Sandboxes](https://www.docker.com/blog/docker-sandboxes-run-agents-in-yolo-mode-safely)** bring microVM isolation to the developer desktop. Each sandbox runs in its own microVM with its own Docker Engine. When an agent inside the sandbox runs `docker compose up`, it hits the internal engine, not your host Docker daemon. Cross-sandbox communication is impossible by default.
+
+**The cost:** ~128MB RAM per VM (Firecracker's minimum), plus the boot time. For local development with one agent, this is fine. For a platform running thousands of concurrent agent sessions, the memory overhead drives architecture decisions (pre-warming pools, snapshot restore, VM recycling).
+
+<Mermaid
+  caption="MicroVMs give each sandbox its own kernel. A compromise in one VM's kernel doesn't affect the host or other VMs."
+  chart={`graph TD
+    subgraph Host["Host"]
+      HK["Host Kernel + KVM"]
+      subgraph VM1["MicroVM 1"]
+        GK1["Guest Kernel"]
+        AGENT1["Agent Code"]
+      end
+      subgraph VM2["MicroVM 2"]
+        GK2["Guest Kernel"]
+        AGENT2["Agent Code"]
+      end
+    end
+
+    AGENT1 -->|"syscalls"| GK1
+    AGENT2 -->|"syscalls"| GK2
+    GK1 -->|"hypercalls"| HK
+    GK2 -->|"hypercalls"| HK
+
+    GK1 -.-|"compromise here\nstays here"| GK1`}
+/>
+
+<Callout type="in-practice">
+
+[E2B's](https://e2b.dev) managed platform runs on Firecracker. When you call `e2b.Sandbox.create()`, you get an isolated microVM with ~150ms cold start. You define custom templates (Dockerfiles that become VM images) and get a full Linux environment per session. This is the fastest path to microVM isolation without managing Firecracker yourself.
+
+</Callout>
+
+<Callout type="gotcha">
+
+Firecracker requires KVM, which means bare-metal Linux or a cloud instance with nested virtualization enabled. It doesn't run on macOS natively -- Docker Sandboxes solves this by running Firecracker inside the Docker Desktop Linux VM, adding one layer of virtualization. On Apple Silicon, this means two virtualization layers (Virtualization.framework to Linux VM to Firecracker).
+
+</Callout>
+
+<Callout type="takeaway">
+
+Use microVMs when you're executing truly untrusted code or running multi-tenant infrastructure. ~128MB RAM and ~125-1100ms boot is the cost. What you get: each sandbox has its own kernel, and a compromise in one cannot reach another.
+
+</Callout>
+
+<Details title="Snapshot restore: how to get microVM boot times under 200ms">
+
+Firecracker supports snapshotting a running VM's memory and device state to disk. Restoring from a snapshot skips kernel boot, init system, and application startup. NumaVM benchmarked snapshot restore at 176ms end-to-end vs 1,133ms cold boot.
+
+The pattern for agent platforms: boot a "golden" VM with the language runtimes, libraries, and tools pre-installed. Snapshot it. For each new agent session, restore from the snapshot and mount the user's code as a virtio-blk device.
+
+NeuroVisor uses a variant: it maintains a pool of pre-warmed VMs (default pool size: 3) that are already booted and waiting. Agent code is sent via gRPC over vsock, executed, and the VM is destroyed. The per-request latency is dominated by code execution, not VM boot.
+
+</Details>
+
+## WASM and V8 Isolates: The Capability-First Model
+
+WebAssembly flips the model. Instead of restricting a process that already has access to everything, WASM starts from nothing and grants capabilities explicitly.
+
+A freshly instantiated WASM module has zero ambient authority. No filesystem. No network. No environment variables. No clock. It can only access what the host runtime explicitly provides through its imports. Memory is bounds-checked linear regions -- buffer overflows can't escape the module's address space.
+
+Cold start: under 5ms (Wasmtime). On Cloudflare's edge, 35 microseconds. Memory overhead: ~2MB per isolate. Nothing else in this post comes close.
+
+<Callout type="definition">
+
+**Capability-based security** -- a security model where a process starts with no permissions and must be explicitly granted each capability (file access, network, etc.) by the host. The opposite of the Unix model, where a process inherits the full permissions of the user who started it. WASM/WASI implements this at the module level.
+
+</Callout>
+
+**[Microsoft's Wassette](https://opensource.microsoft.com/blog/2025/08/06/introducing-wassette-webassembly-based-tools-for-ai-agents)** demonstrates the integration path: it's a Wasmtime-based runtime that exposes WebAssembly Components as MCP tools. Each component function becomes a tool the LLM can call. The sandbox enforces deny-by-default -- a tool that claims to do math can't secretly read the filesystem.
+
+**[MCP-SandboxScan](https://arxiv.org/html/2601.01241v1)** uses the same model for security analysis: it executes untrusted MCP tools inside WASM and tracks information flow (how do environment secrets and file contents propagate to tool outputs?).
+
+**V8 isolates** (Cloudflare Workers, Deno) provide similar capability-based isolation for JavaScript/TypeScript with single-digit millisecond startup.
+
+**The trade-off is brutal:** you can only run code that compiles to WASM. That means no arbitrary `pip install`, no shell scripts, no `apt-get`, no system binaries. For AI coding agents that need to run the code they generate -- which is most of them -- WASM is currently limited to pre-compiled tool functions, not general code execution.
+
+<Callout type="takeaway">
+
+WASM offers the best isolation-to-overhead ratio when it applies. For pre-compiled tool functions (MCP tools, typed API calls), it's the obvious choice. For general code execution, it's not there yet.
+
+</Callout>
+
+## The Numbers, Side by Side
+
+Every claim above has a number. Here they are in one place.
+
+|  | OS Sandbox | Container (runc) | gVisor | MicroVM (Firecracker) | WASM/V8 |
+|---|---|---|---|---|---|
+| Cold start | ~0ms | ~50ms | ~100ms | 125-1,100ms | under 5ms |
+| Memory overhead | ~0MB | ~10MB | ~30MB | ~128MB | ~2MB |
+| Kernel shared? | Yes | Yes | Yes (reduced surface) | No (own kernel) | N/A |
+| Arbitrary code? | Yes | Yes | Yes | Yes | No (WASM only) |
+| Network isolation? | Configurable | Yes | Yes (Netstack) | Yes | No network by default |
+| Escape CVEs (2024-2026) | Rare (kernel-level) | 3 runc CVEs (Nov 2025) | None disclosed | None disclosed | None disclosed |
+| Who uses it | Codex CLI, Safehouse | Most CI/CD agents | Modal, K8s agent-sandbox | E2B, Docker Sandboxes, AWS Lambda | Cloudflare Workers, Wassette |
+
+## Managed Platforms: Isolation as a Service
+
+Unless you're building agent infrastructure, you probably don't want to manage Firecracker pools or gVisor runtime classes yourself. Three managed platforms abstract the isolation layer:
+
+**E2B** -- Firecracker microVMs. Purpose-built for AI agent code execution. ~150ms cold start. Custom templates via Dockerfiles. Python/JS/TS SDKs. No GPU support. Pricing: ~$0.083/hr per sandbox.
+
+**Modal** -- gVisor isolation. Broader AI infrastructure platform (not just sandboxing). GPU support (T4 through B200). 50,000+ concurrent sessions. Python/JS/Go SDKs. Pricing: ~$0.119/hr per sandbox.
+
+**Cloudflare Workers** -- V8 isolates. JavaScript/TypeScript only. Ultra-fast startup (single-digit ms). Edge-distributed. No GPU, no arbitrary binaries. Pricing: ~$0.090/hr equivalent.
+
+The decision comes down to your language requirements and whether you need GPU access. If your agent generates Python and you need strong isolation, E2B. If you need GPU for inference alongside code execution, Modal. If your tools are TypeScript functions, Cloudflare.
+
+<Callout type="gotcha">
+
+Pricing comparisons across sandbox platforms are misleading without normalizing for what's included. E2B charges per sandbox-hour with generous CPU/RAM. Modal charges per compute-second with separate GPU pricing. Cloudflare charges per request with duration limits. Benchmark your actual workload before comparing costs.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Managed platforms let you choose isolation strength without managing infrastructure. E2B for strongest isolation (microVM), Modal for GPU + moderate isolation (gVisor), Cloudflare for fastest startup with language constraints (V8).
+
+</Callout>
+
+## Choosing the Right Level: A Decision Tree
+
+The decision isn't "which is safest" -- it's "what's the cheapest isolation that matches my threat model." Here's how to decide.
+
+**Question 1: Where does the agent run?**
+
+If it's on your laptop (local development), start with an OS-level sandbox. Agent Safehouse or Codex CLI's built-in sandbox costs nothing and prevents the most common accident: an agent modifying files outside your project. You're the only tenant, the threat is accidental damage or supply-chain poisoning in a cloned repo, and the kernel-enforced file policy handles it.
+
+If it's on a server (CI/CD, cloud, multi-tenant platform), you need at least containers, and probably stronger.
+
+**Question 2: Do you control the code the agent executes?**
+
+If yes (your agent runs your code in containers you build), standard containers with a locked-down seccomp profile are sufficient. Pin your base images, scan for vulnerabilities, don't run as root.
+
+If no (the agent generates and executes arbitrary code), you need gVisor or microVMs. The shared-kernel attack surface of standard containers is not acceptable for code you didn't write.
+
+**Question 3: Are you multi-tenant?**
+
+If different users' agents run on the same hardware, you need microVMs. gVisor reduces the kernel attack surface but doesn't eliminate it. Firecracker or Kata Containers give each tenant their own kernel -- which is the minimum for a defensible multi-tenant security posture.
+
+**Question 4: Does the agent's tool only need typed inputs and outputs (no shell, no filesystem)?**
+
+If yes, consider WASM. A tool that takes structured input and returns structured output doesn't need a full Linux environment. WASM gives you the best isolation-to-overhead ratio for this pattern.
+
+<Mermaid
+  caption="Decision tree for choosing an isolation level. Start from your deployment context, not from the technology."
+  chart={`graph LR
+    A["Where does\nthe agent run?"] -->|"My laptop"| B["OS-level\nsandbox"]
+    A -->|"Server / cloud"| C{"Do you control\nthe code?"}
+    C -->|"Yes"| D["Container\n(locked down)"]
+    C -->|"No"| E{"Multi-tenant?"}
+    E -->|"Yes"| F["MicroVM\n(Firecracker)"]
+    E -->|"No"| G["gVisor"]
+    G -.- H["Or: WASM if\ntools are typed\nfunctions only"]`}
+/>
+
+<Callout type="takeaway">
+
+Start from where the agent runs and what it executes, not from which technology sounds strongest. Local dev: OS sandbox. Trusted code on servers: containers. Untrusted code: gVisor. Multi-tenant: microVMs. Typed functions: WASM.
+
+</Callout>
+
+## What Sandboxing Can't Close
+
+If you've read the companion posts in this series, you know the punchline: the scariest agent attacks don't execute code at all. They travel through the LLM's context window.
+
+Tool poisoning, cross-server exfiltration, indirect prompt injection -- these attacks manipulate what the agent *decides* to do, not how the process executes. You can sandbox every process in a Firecracker microVM with 6 layers of defense-in-depth, and a poisoned MCP tool description can still make the agent `curl` your secrets to an attacker-controlled endpoint using a completely legitimate network call that the agent has permission to make.
+
+The [MCP Security post](/writing/mcp-security) covers this in detail: "You can sandbox every server in Docker and still get compromised through the context window." Sandboxing limits the blast radius of code execution. It does not limit the blast radius of context manipulation.
+
+The correct mental model has two separate defense tracks:
+
+1. **Runtime isolation** (this post): contain what happens when the agent executes code. OS sandboxes, containers, gVisor, microVMs, WASM.
+
+2. **Context integrity** (the companion posts): control what goes into the agent's decision-making. Permission prompts, instruction hierarchy, supply-chain verification, MCP gateways, human-in-the-loop.
+
+Neither track is sufficient alone. A sandboxed agent that follows poisoned instructions is still dangerous (it can use its legitimate capabilities maliciously). An un-sandboxed agent with perfect context integrity is still dangerous (it can make a mistake with unrestricted system access).
+
+<Mermaid
+  caption="Two separate attack channels require two separate defense tracks. Sandboxing and context integrity are complementary, not interchangeable."
+  chart={`graph TD
+    ATK["Attack"] --> CTX["Through context\nwindow?"]
+    ATK --> CODE["Through code\nexecution?"]
+
+    CTX -->|"tool poisoning,\nprompt injection"| DEF_CTX["Defense:\nMCP gateway,\ninstruction hierarchy,\nhuman approval"]
+    CODE -->|"rm -rf, exfiltration,\nkernel exploit"| DEF_RT["Defense:\nruntime isolation\n(this post)"]
+
+    DEF_CTX -.- NOTE1["Sandboxing\ndoesn't help here"]
+    DEF_RT -.- NOTE2["Context integrity\ndoesn't help here"]`}
+/>
+
+<Callout type="gotcha">
+
+The most insidious attack pattern combines both channels: a poisoned rules file (context attack) instructs the agent to write a script that exfiltrates data (code attack). A sandbox might block the exfiltration if it restricts network or file access -- but only if the sandbox policy anticipated that specific path. Defense in depth means neither track alone is reliable.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Sandboxing is necessary and insufficient. It stops code-execution attacks but not context-window attacks. You need both runtime isolation (contain what the agent does) and context integrity (control what the agent decides to do).
+
+</Callout>
+
+## Summary
+
+The isolation spectrum is a menu, not a ranking. OS sandboxes (~0ms, kernel-enforced file policy) for local dev. Containers for trusted code on servers. gVisor (~100ms, user-space kernel) for untrusted single-tenant. MicroVMs (~125ms, own kernel via KVM) for multi-tenant. WASM (~5ms, capability-based) for typed tool functions.
+
+Standard Docker containers (runc) share the host kernel. Three escape CVEs in November 2025 demonstrate why this is not an acceptable boundary for LLM-generated code. Use containers for packaging, not for security.
+
+If you're a developer using coding agents locally, an OS-level sandbox is the right default. [Agent Safehouse](https://agent-safehouse.dev/) (macOS) and Codex CLI's built-in sandbox (macOS + Linux) enforce file access policies at the kernel level with zero overhead.
+
+The attacks that should keep you up at night bypass all runtime isolation by traveling through the LLM's context window. Sandboxing limits the blast radius of code execution, not context manipulation. You need both defense tracks.
+
+Managed platforms ([E2B](https://e2b.dev), [Modal](https://modal.com), [Cloudflare Workers](https://workers.cloudflare.com)) handle the infrastructure. Choose by threat model and language requirements, not by which technology sounds strongest.
+
+**Immediate actions:**
+
+1. If you run agents in permissive mode locally, install Agent Safehouse or use Codex CLI's built-in sandbox. It's one command and zero overhead.
+2. If you run agents on servers, evaluate whether your isolation level matches your trust model: containers for your code, gVisor or microVMs for generated code.
+3. Don't stop at sandboxing. Read the companion posts on context-window attacks and MCP security for the other half of the defense.
+
+### Further Reading
+
+- **Start here:** [Docker: Comparing Sandboxing Approaches for AI Agents](https://www.docker.com/blog/comparing-sandboxing-approaches-ai-agents/) -- the clearest end-to-end walkthrough of chroot to systemd-nspawn to containers to microVMs, with hands-on examples at each level.
+
+- **Start here:** [Senko Rasic: Sandboxing AI Agents in Linux](https://blog.senko.net/sandboxing-ai-agents-in-linux) -- practical guide to bubblewrap-based sandboxing for Linux developers using coding agents.
+
+- **Go deeper:** [Zylos Research: AI Agent Sandboxing and Security Isolation](https://zylos.ai/research/2026-04-04-ai-agent-sandboxing-security-isolation) -- the most comprehensive technical comparison of microVMs, gVisor, WASM, and containers for AI agent workloads, with performance benchmarks.
+
+- **Go deeper:** [NeuroVisor](https://github.com/malcolmxsc/neurovisor) -- open-source reference implementation of Firecracker-based AI code execution with 6-layer defense-in-depth.
+
+- **Go deeper:** [Kubernetes Agent Sandbox](https://kubernetes.io/blog/2026/03/20/running-agents-on-kubernetes-with-agent-sandbox/) -- the official Kubernetes SIG Apps approach to running agents with pluggable isolation backends (gVisor, Kata Containers).
+
+- **Companion post:** [Everything Your Agent Reads Is Code](/writing/agent-trust-surface) -- the attack surface that sandboxing doesn't cover: how configuration files, skills, and external content become agent instructions.
+
+- **Companion post:** [Tool Descriptions Are Code: MCP Security from First Principles](/writing/mcp-security) -- the protocol-level attacks (tool poisoning, cross-server exfiltration) that bypass all runtime isolation.
