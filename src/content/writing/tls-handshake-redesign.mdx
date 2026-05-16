@@ -1,0 +1,464 @@
+---
+title: "TLS 1.3 Removed Half the Protocol. The Web Got More Secure."
+subtitle: "How removing cipher suites, round trips, and decades of backwards compatibility made every connection on the Internet safer"
+date: 2026-05-15
+tags: ["security", "networking", "cryptography", "tls", "protocols"]
+readTime: "18 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## The 100 Milliseconds You Never Think About
+
+You type a URL. Your browser connects to a server. Before a single byte of the page loads, something happens that you never see: your browser and the server run a cryptographic ceremony. They agree on who they are, how they'll communicate, and what keys they'll use to encrypt everything that follows. This is the TLS handshake, and it protects every HTTPS connection on the Internet.
+
+TLS 1.2 ran this handshake for nearly a decade. It worked. It also accumulated a graveyard of vulnerabilities with names like BEAST, POODLE, ROBOT, LogJam, and Lucky13 -- attacks that exploited the protocol's own design, not just buggy implementations.
+
+In 2018, the IETF published [RFC 8446](https://www.rfc-editor.org/rfc/rfc8446): TLS 1.3. The biggest change wasn't what they added. It was what they removed. Entire categories of cryptographic options, a full round trip from the handshake, the ability for a server's certificate to be visible to anyone watching the connection. The result: a protocol that's both faster and harder to break, not in spite of having fewer features, but because of it.
+
+This post walks through what actually happens when your browser connects, what went wrong with TLS 1.2, and how TLS 1.3 fixed it by being more opinionated about fewer things.
+
+## What Most Engineers Get Wrong About TLS
+
+Before we go deeper, let's surface the misconceptions that make TLS conversations confusing. If you've worked with HTTPS but never read the RFCs, some of these probably feel true.
+
+<Callout type="definition">
+
+**TLS (Transport Layer Security)** -- a cryptographic protocol that provides privacy and data integrity between two communicating applications. It's the "S" in HTTPS. The current version is TLS 1.3 ([RFC 8446](https://www.rfc-editor.org/rfc/rfc8446), published 2018). Its predecessor, TLS 1.2 (RFC 5246, published 2008), is still widely deployed but increasingly being phased out.
+
+</Callout>
+
+| Common Belief | Reality | Why It Matters |
+|---|---|---|
+| TLS 1.3 is just TLS 1.2 with a speed bump | TLS 1.3 removed RSA key exchange, CBC ciphers, custom DH parameters, compression, renegotiation, and non-AEAD ciphers entirely. It's a redesign, not a patch. | If you configure 1.3 expecting 1.2 behavior, you'll break things. |
+| More cipher options = better security | TLS 1.2 supported 300+ cipher suites. TLS 1.3 supports 5. The combinatorial explosion of options was itself a vulnerability class. | Every option is a potential misconfiguration. The LogJam and FREAK attacks exploited exactly this. |
+| The handshake is just boring overhead | The handshake is where security is established or broken. Every major TLS vulnerability targeted the handshake, not the bulk encryption. | Optimizing the handshake (1-RTT, encrypted certificates) was the primary design goal of TLS 1.3. |
+| Forward secrecy is optional / nice-to-have | TLS 1.3 makes forward secrecy mandatory. Every connection uses ephemeral keys. There is no option to disable it. | Without forward secrecy, a stolen server key decrypts every past connection. Nation-states are recording encrypted traffic today, betting on future decryption. |
+| 0-RTT means TLS 1.3 connections have zero overhead | 0-RTT data can be replayed by an attacker. It sacrifices replay protection for speed. Servers must handle this at the application layer. | Blindly enabling 0-RTT on a payment API means an attacker can replay a charge. |
+
+<Callout type="takeaway">
+
+TLS 1.3 isn't an incremental update. It's a different protocol wearing the same name, redesigned around the failures of its predecessor.
+
+</Callout>
+
+## The TLS Handshake: A Trust Ceremony in Milliseconds
+
+Every TLS connection starts with a handshake -- a structured exchange where client and server negotiate how they'll communicate. Understanding what the handshake does (and what it exposes) is the foundation for understanding what TLS 1.3 changed.
+
+In TLS 1.2, a full handshake takes two round trips before the first byte of encrypted application data can flow. Here's what happens:
+
+**Round trip 1:** The client sends a ClientHello containing its supported protocol versions, cipher suites, and random data. The server responds with a ServerHello (choosing the cipher suite), its certificate (proving identity), and optionally a ServerKeyExchange message with Diffie-Hellman parameters.
+
+**Round trip 2:** The client sends its key exchange material (ClientKeyExchange), switches to encrypted mode (ChangeCipherSpec), and sends a Finished message proving the handshake wasn't tampered with. The server does the same.
+
+<Mermaid
+  caption="TLS 1.2 full handshake. Two round trips before the first encrypted byte flows. The certificate and cipher negotiation travel in plaintext."
+  chart={`sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    rect rgb(245, 240, 230)
+    Note over C,S: Round Trip 1
+    C->>S: ClientHello (versions, ciphers, random)
+    S->>C: ServerHello (chosen cipher, random)
+    S->>C: Certificate (in plaintext!)
+    S->>C: ServerKeyExchange + ServerHelloDone
+    end
+
+    rect rgb(240, 245, 235)
+    Note over C,S: Round Trip 2
+    C->>S: ClientKeyExchange
+    C->>S: ChangeCipherSpec + Finished
+    S->>C: ChangeCipherSpec + Finished
+    end
+
+    Note over C,S: Encrypted application data begins
+    C->>S: GET /dashboard (encrypted)`}
+/>
+
+Two things stand out about TLS 1.2's handshake. First: the server's certificate travels in the clear. Anyone watching the connection -- your ISP, a corporate proxy, a nation-state -- can see exactly which site you're connecting to, even though the content is encrypted. Second: the cipher suite negotiation happens before encryption kicks in. An attacker who can modify packets in transit can tamper with which ciphers are chosen -- the basis of downgrade attacks.
+
+<Callout type="gotcha">
+
+The server certificate in TLS 1.2 is sent in the clear. Anyone passively observing your traffic knows which site you're connecting to -- even if the page content is fully encrypted. This is the privacy leak that later motivated Encrypted Client Hello (ECH).
+
+</Callout>
+
+<Details title="What about session resumption in TLS 1.2?">
+
+TLS 1.2 supports two resumption mechanisms: session IDs (server stores session state) and session tickets (server encrypts state and sends it to the client). Both reduce the handshake to 1-RTT on subsequent connections. Session tickets have a forward secrecy problem: if the ticket encryption key is compromised, all sessions encrypted with it are exposed. TLS 1.3 replaces both with a unified PSK (pre-shared key) mechanism.
+
+</Details>
+
+<Callout type="takeaway">
+
+The TLS 1.2 handshake exposes two things it shouldn't: the server's identity (via the plaintext certificate) and the cipher negotiation (enabling downgrade attacks). Both round trips happen before a single byte of your actual request moves.
+
+</Callout>
+
+## Key Exchange: How Two Strangers Share a Secret
+
+The core challenge of TLS is this: two machines that have never communicated need to agree on a shared encryption key, over a network that anyone can eavesdrop on. There are two fundamental approaches, and the choice between them is the single biggest security difference between TLS 1.2 and TLS 1.3.
+
+**RSA key exchange** (available in TLS 1.2, removed in TLS 1.3): The client generates a random secret, encrypts it with the server's public key (from the certificate), and sends it over. The server decrypts it with its private key. Simple and elegant. Also catastrophically fragile.
+
+The problem: the server's private key is a single point of failure for *all* past connections. If an attacker records your encrypted traffic today, and later obtains the server's private key (through a hack, a legal order, or a disgruntled employee), they can decrypt every recorded session retroactively. The private key never changes, so the damage is unbounded.
+
+**Diffie-Hellman key exchange** (the only option in TLS 1.3): Both parties generate a fresh, temporary keypair for each connection. They exchange public values, and through the mathematics of the discrete logarithm problem, both arrive at the same shared secret -- without ever transmitting it. The server still uses its certificate to prove identity (via a digital signature), but the certificate key is never used to encrypt data.
+
+The critical difference: when the connection ends, the temporary ("ephemeral") keys are discarded. Even if the server's long-term private key is later compromised, past sessions remain encrypted because the ephemeral keys no longer exist.
+
+<Mermaid
+  caption="RSA vs. Diffie-Hellman key exchange. RSA binds all past sessions to one long-lived key. DH uses throwaway keys per session."
+  chart={`graph LR
+    subgraph rsa ["RSA Key Exchange (TLS 1.2)"]
+      A["Client generates\nrandom secret"] --> B["Encrypts with\nserver's public key"]
+      B --> C["Server decrypts\nwith private key"]
+      C --> D["Shared secret\nestabished"]
+    end
+    subgraph dh ["Diffie-Hellman (TLS 1.3)"]
+      E["Both generate\nephemeral keypairs"] --> F["Exchange\npublic values"]
+      F --> G["Math derives\nsame shared secret"]
+      G --> H["Ephemeral keys\ndiscarded"]
+    end
+    D -.- I["Key stolen later =\nall past traffic exposed"]
+    H -.- J["Key stolen later =\npast traffic still safe"]`}
+/>
+
+<Callout type="takeaway">
+
+TLS 1.3 removed RSA key exchange entirely. Every connection uses ephemeral Diffie-Hellman. The server's certificate proves identity but never touches the encryption key. This is the foundation of forward secrecy.
+
+</Callout>
+
+<Callout type="in-practice">
+
+TLS 1.3 supports two Diffie-Hellman variants: ECDHE (Elliptic Curve, using curves like X25519 or P-256) and DHE (finite-field). In practice, X25519 dominates: it's fast (around 50 microseconds per operation), resistant to timing attacks, and hard to misconfigure. TLS 1.3 restricts the allowed curves and parameters to known-safe choices, eliminating the WeakDH and LogJam attacks that exploited poorly-chosen parameters in TLS 1.2.
+
+</Callout>
+
+<Details title="The paint-mixing analogy">
+
+The classic analogy for Diffie-Hellman: imagine Alice and Bob each have a secret paint color. They agree on a public base color (say, yellow). Alice mixes her secret color with yellow and sends the result to Bob. Bob mixes his secret color with yellow and sends the result to Alice. Now Alice mixes Bob's blend with her secret color, and Bob mixes Alice's blend with his secret color. They both arrive at the same final color -- but an eavesdropper who saw only the blended intermediates can't reverse the mixing to recover the secrets.
+
+The mathematical equivalent uses modular exponentiation (classic DH) or elliptic curve point multiplication (ECDHE). The "hard to reverse" property comes from the discrete logarithm problem: given g^a mod p, finding a is computationally infeasible for large primes.
+
+</Details>
+
+## Forward Secrecy: Why Yesterday's Traffic Must Stay Encrypted
+
+Forward secrecy (sometimes called "perfect forward secrecy") is the property that compromise of a server's long-term private key does not compromise the session keys of past connections. In TLS 1.2, forward secrecy was optional -- you got it if you chose a DHE or ECDHE cipher suite, but RSA key exchange was the default for many configurations. In TLS 1.3, forward secrecy is mandatory. There is no mode that lacks it.
+
+This isn't a theoretical concern. In August 2021, the NSA publicly acknowledged that nation-state adversaries are recording encrypted Internet traffic today, storing it cheaply, and planning to decrypt it when quantum computers arrive. The strategy has a name: "Harvest Now, Decrypt Later."
+
+With RSA key exchange, a single key compromise retroactively exposes every session that used it. An attacker doesn't need quantum computing for this -- a compromised key, a legal warrant, or a vulnerability like Heartbleed (which leaked private keys from server memory) is enough. With ephemeral Diffie-Hellman, each session key is independent. Even a full server compromise only exposes the current session, not the archive of past traffic.
+
+This is why TLS 1.3's mandate isn't just a security improvement -- it's an architectural decision. By removing RSA key exchange, the protocol eliminates an entire category of retroactive surveillance. The server's certificate key authenticates; it never encrypts.
+
+<Mermaid
+  caption="Without forward secrecy, one key compromise exposes everything. With it, each session is independently protected."
+  chart={`graph LR
+    subgraph without_fs ["Without Forward Secrecy"]
+      A["Session 1\nJan 2024"] --> K["All encrypted\nwith same key"]
+      B["Session 2\nMar 2024"] --> K
+      C["Session 3\nJun 2024"] --> K
+      K --> L["Key stolen\nDec 2024"]
+      L --> M["All 3 sessions\ndecryptable"]
+    end
+    subgraph with_fs ["With Forward Secrecy"]
+      D["Session 1\nKey: k1"] --> N["k1 discarded"]
+      E["Session 2\nKey: k2"] --> O["k2 discarded"]
+      F["Session 3\nKey: k3"] --> P["k3 discarded"]
+      Q["Server key\nstolen Dec 2024"]
+      Q --> R["Past sessions\nstill encrypted"]
+    end`}
+/>
+
+<Callout type="gotcha">
+
+Forward secrecy protects past traffic from key compromise, but it does NOT protect against quantum attacks on the key exchange itself. A quantum computer running Shor's algorithm could break ECDHE and DHE just as it could break RSA. That's why post-quantum cryptography (hybrid ML-KEM + ECDHE key exchange) is already being deployed -- Cloudflare reports over half of human-initiated traffic now uses post-quantum key agreement.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Forward secrecy isn't optional paranoia. Nation-states are actively recording encrypted traffic. TLS 1.3 eliminated the option to skip it, which means every HTTPS connection today is protected against retroactive decryption by default.
+
+</Callout>
+
+## Side by Side: TLS 1.2 vs. TLS 1.3 Handshake
+
+With the concepts in place, here's what the redesign actually looks like in practice. TLS 1.3 collapses two round trips into one, encrypts the server certificate, and eliminates multiple legacy messages.
+
+<Mermaid
+  caption="The TLS 1.3 handshake is one round trip shorter. The client sends its key share upfront (guessing the server's preferred group). The server's certificate and all subsequent messages are encrypted."
+  chart={`sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    rect rgb(255, 240, 240)
+    Note over C,S: TLS 1.2 - Two Round Trips
+    C->>S: ClientHello
+    S->>C: ServerHello + Certificate (plaintext)
+    S->>C: ServerKeyExchange + ServerHelloDone
+    C->>S: ClientKeyExchange + ChangeCipherSpec
+    C->>S: Finished
+    S->>C: ChangeCipherSpec + Finished
+    end
+
+    rect rgb(235, 250, 235)
+    Note over C,S: TLS 1.3 - One Round Trip
+    C->>S: ClientHello + KeyShare
+    S->>C: ServerHello + KeyShare
+    Note over C,S: Encrypted from here
+    S->>C: Certificate + CertVerify + Finished
+    C->>S: Finished
+    end`}
+/>
+
+<Callout type="in-practice">
+
+The structural difference shows up in production numbers. A migration of 300M+ daily requests from TLS 1.2 to TLS 1.3 measured **35% shorter** handshake latency, **40% lower** p95 tail latency (TTFB dropped from 318ms to 194ms globally), and **28% less** CPU usage on load balancers. Session reuse rates climbed to 94-98% with TLS 1.3's PSK mechanism. The speed gain isn't marginal -- it's the difference users feel on every page load.
+
+</Callout>
+
+## The Attack Graveyard: What TLS 1.3 Killed and Why
+
+TLS 1.3's security story isn't about what was added -- it's about what was removed. Every removal has a specific attack (or class of attacks) behind it. Here's the graveyard.
+
+<Callout type="in-practice">
+
+You might wonder: if these features were so dangerous, why did TLS 1.2 support them? Because when TLS was designed in the late 1990s, the formal tools for analyzing protocol security didn't exist yet. Hugo Krawczyk's [SIGMA paper](http://webee.technion.ac.il/~hugo/sigma-pdf.pdf) (the theoretical foundation for modern authenticated key exchange) wasn't published until 2003 -- four years after TLS 1.0. TLS 1.3 was the first version designed alongside formal verification tools like [Tamarin and ProVerif](https://ieee-security.org/TC/SP2016/papers/0824a470.pdf), which proved security properties mathematically rather than hoping for the best.
+
+</Callout>
+
+| What Was Removed | The Attack(s) It Enabled | What Replaced It |
+|---|---|---|
+| RSA key exchange | ROBOT (Bleichenbacher 1998, rediscovered 2017): million-message attack recovers server's private key operation. No forward secrecy: stolen key decrypts all past traffic. | Ephemeral Diffie-Hellman (ECDHE/DHE) only. Certificate key authenticates, never encrypts. |
+| CBC mode ciphers | BEAST (2011), Lucky13 (2013), POODLE (2014): padding oracle attacks exploiting the MAC-then-Encrypt construction. The interaction between CBC padding and MAC verification leaked plaintext. | AEAD ciphers only (AES-GCM, ChaCha20-Poly1305). Encryption and authentication in one operation -- no padding oracle possible. |
+| Custom DH parameters | LogJam (2015), WeakDH (2015): servers tricked into using small DH groups (512/768-bit) that could be broken in minutes. Some implementations used parameters with bad mathematical properties. | Named groups only (X25519, P-256, etc.). Server cannot choose arbitrary parameters. |
+| RC4 stream cipher | RC4 biases (2013): measurable statistical biases in keystream allowed plaintext recovery with enough captured traffic. | Removed entirely. Only AEAD ciphers permitted. |
+| PKCS#1 v1.5 signatures | Bleichenbacher signature forgery (2006): incorrect padding validation allowed forged signatures against major implementations (NSS, OpenSSL). | RSA-PSS only (probabilistic, formally analyzed). |
+| Unsigned cipher negotiation | FREAK (2015), LogJam (2015): attacker modifies ClientHello to advertise only weak "export" ciphers. Server picks a weak cipher, attacker breaks it. | Server signs the entire handshake transcript. Any tampering is detectable. |
+
+<Details title="The full list of removed features">
+
+Beyond the items above, TLS 1.3 also removed:
+
+- Static RSA and DH cipher suites (no forward secrecy)
+- Arbitrary DH groups (replaced with named groups)
+- Export ciphers (intentionally weakened for 1990s US export law)
+- SHA-1 in handshake hash (collision attacks demonstrated in 2017)
+- Compression (CRIME attack, 2012)
+- Renegotiation (used in triple-handshake attack)
+- Non-AEAD ciphers (all of them)
+- ChangeCipherSpec message (vestigial; served no security purpose)
+- DSA certificates (rarely used, harder to implement safely)
+- Record-layer version number (caused middlebox failures)
+
+Source: [RFC 8446, Section 1.2](https://www.rfc-editor.org/rfc/rfc8446#section-1.2) "Major Differences from TLS 1.2"
+
+</Details>
+
+<Callout type="takeaway">
+
+The pattern is clear: every feature TLS 1.3 removed was an attack surface. The protocol got more secure not by adding defenses, but by eliminating the things that needed defending.
+
+</Callout>
+
+## Less Crypto, More Security: TLS 1.3's Opinionated Design
+
+TLS 1.2 gave you a take-out menu. You could combine any key exchange method with any cipher, any MAC, and any signature algorithm. The IANA registry listed over 300 cipher suites. The result: most servers ran with whatever OpenSSL defaulted to, many configurations were subtly wrong, and the combinatorial surface area was massive.
+
+TLS 1.3 took the opposite approach. It supports exactly five cipher suites:
+
+- `TLS_AES_128_GCM_SHA256`
+- `TLS_AES_256_GCM_SHA384`
+- `TLS_CHACHA20_POLY1305_SHA256`
+- `TLS_AES_128_CCM_SHA256`
+- `TLS_AES_128_CCM_8_SHA256`
+
+All five are AEAD (Authenticated Encryption with Associated Data), which means encryption and integrity checking happen in a single cryptographic operation. No MAC-then-encrypt, no encrypt-then-MAC, no padding oracles. The construction is secure by design, not by careful implementation of a fragile sequence.
+
+<Callout type="definition">
+
+**AEAD (Authenticated Encryption with Associated Data)** -- a cryptographic construction that provides both confidentiality and integrity in a single operation. You give it a key, a nonce (one-time number), plaintext, and optional associated data (like a header). It returns ciphertext and an authentication tag. If anyone modifies the ciphertext or associated data, decryption fails. AES-GCM and ChaCha20-Poly1305 are the two AEAD algorithms used in TLS 1.3.
+
+</Callout>
+
+Key exchange is negotiated separately: ECDHE (with X25519 or P-256) or DHE (with fixed named groups). Signature algorithms are also negotiated independently. This orthogonal design means you're choosing from a small set of known-safe options in each category, not navigating a combinatorial explosion.
+
+The handshake itself is signed: the server produces a digital signature over the entire handshake transcript, not just part of it. In TLS 1.2, the cipher negotiation was protected only by a symmetric MAC, which enabled the downgrade attacks (FREAK, LogJam) described above. In TLS 1.3, any modification to the negotiation is detectable.
+
+<Mermaid
+  caption="TLS 1.2's combinatorial menu vs. TLS 1.3's orthogonal, constrained design. Fewer options means fewer attack surfaces."
+  chart={`graph LR
+    subgraph tls12 ["TLS 1.2 Negotiation"]
+      A["Key Exchange\n(RSA, DHE, ECDHE,\nstatic DH, ...)"] --- B["Cipher\n(AES-CBC, AES-GCM,\nRC4, 3DES, ...)"]
+      B --- C["MAC\n(HMAC-SHA1,\nHMAC-SHA256, ...)"]
+      C --- D["300+ combinations\n= 300+ things\nto get wrong"]
+    end
+    subgraph tls13 ["TLS 1.3 Negotiation"]
+      E["AEAD Cipher\n(5 choices)"] --- F["Key Exchange\n(ECDHE/DHE,\nnamed groups)"]
+      F --- G["Signature\n(independent)"]
+      G --- H["Small set,\nall safe"]
+    end`}
+/>
+
+This is the central insight of TLS 1.3's design: security comes from constraint, not flexibility. When there are fewer things to get wrong, fewer things go wrong.
+
+<Callout type="takeaway">
+
+TLS 1.3 went from 300+ cipher suites to 5. Key exchange, ciphers, and signatures are negotiated independently. The full handshake is signed. Every design choice reduces the surface area for attacks.
+
+</Callout>
+
+## 0-RTT: The Speed-Security Tradeoff Nobody Warns You About
+
+TLS 1.3's headline performance feature is 0-RTT (zero round-trip time) resumption. If a client has connected to a server before, it can send encrypted application data in the very first message of a new connection -- no waiting for the handshake to complete. On mobile networks where round trips take 100-200ms, this is transformative.
+
+Here's how it works: after a successful TLS 1.3 handshake, the server sends the client a session ticket containing a pre-shared key (PSK). On the next connection, the client includes this PSK and immediately sends "early data" encrypted with a key derived from it. The server can process this early data before the handshake completes.
+
+The catch: 0-RTT data has no server contribution to the key. The encryption is based entirely on the PSK from the previous session. This means 0-RTT lacks a property that the regular 1-RTT handshake provides: protection against replay attacks.
+
+An attacker who captures a 0-RTT packet can replay it to the server. The server has no cryptographic way to distinguish the replay from the original. If that 0-RTT data was a GET request for a page, the worst case is the server serves the page twice. If it was a POST to a payment API, you've just charged someone twice.
+
+<Mermaid
+  caption="0-RTT replay: an attacker who captures a 0-RTT flight can replay it. The server cannot cryptographically distinguish the original from the replay."
+  chart={`sequenceDiagram
+    participant C as Client
+    participant A as Attacker
+    participant S as Server
+
+    Note over C,S: Normal 0-RTT resumption
+    C->>S: ClientHello + PSK + Early Data (GET /)
+    S->>C: ServerHello + Finished
+    Note over C,S: Page served, fast!
+
+    Note over C,S: Replay attack scenario
+    Note over A: Captures the 0-RTT packet
+    A->>S: Replays ClientHello + PSK + Early Data
+    S->>A: Server processes it again
+    Note over S: No cryptographic way to distinguish`}
+/>
+
+This is why 0-RTT is opt-in, and why the RFC explicitly warns that "there are no guarantees of non-replay." Application developers must treat 0-RTT data as potentially replayed. In practice, browsers send only safe HTTP methods (GET, HEAD) in early data, and servers must implement their own anti-replay measures for anything state-changing.
+
+<Callout type="gotcha">
+
+Simply upgrading your TLS library to support 1.3 can expose your APIs to replay attacks if 0-RTT is enabled by default. Trail of Bits [documented cases](https://blog.trailofbits.com/2019/03/25/what-application-developers-need-to-know-about-tls-early-data-0rtt/) where enabling 0-RTT on existing infrastructure created new vulnerabilities in APIs that were previously safe. Check your TLS library's 0-RTT configuration before upgrading.
+
+</Callout>
+
+<Details title="Server-side anti-replay strategies">
+
+The RFC describes two server-side approaches to limit 0-RTT replay:
+
+1. **Single-use tickets:** The server maintains a database of used session tickets and rejects duplicates. Provides strong replay protection but requires shared state across server instances.
+
+2. **Client hello recording:** The server records a unique identifier from each ClientHello and rejects duplicates within a time window. Simpler but requires synchronized clocks.
+
+3. **Freshness checks:** The server embeds a timestamp in the session ticket and rejects early data where the elapsed time exceeds a threshold (typically seconds). Limits the replay window but doesn't eliminate it.
+
+In practice, many high-traffic services accept the replay risk for GET requests and reject 0-RTT entirely for POST/PUT/DELETE. This is the pragmatic tradeoff.
+
+</Details>
+
+<Callout type="takeaway">
+
+0-RTT is not a free lunch. It trades replay protection for speed. Safe for idempotent requests (GET). Dangerous for state-changing operations. Your application layer is responsible for the difference.
+
+</Callout>
+
+## When the Internet Fought Back: Middleboxes and Protocol Ossification
+
+TLS 1.3 was technically complete by 2016. It didn't ship in browsers until 2018. The reason wasn't a security debate -- it was middleboxes.
+
+Middleboxes are network devices that inspect, modify, or filter traffic in transit: corporate firewalls, intrusion detection systems, DLP appliances, mobile carrier proxies. Many of them parse TLS handshakes to make policy decisions. And many of them implemented TLS parsing incorrectly.
+
+When browsers tried deploying TLS 1.3, a significant percentage of connections failed. The middleboxes saw an unfamiliar version number (0x0304 instead of 0x0303) and dropped the connection. Some crashed. Some corrupted the handshake. The failure rate was high enough to make deployment impractical.
+
+This is protocol ossification: when a field in a protocol is supposed to be flexible (like the version number), but in practice never changes, implementations start treating it as a fixed constant. When the protocol finally does use the flexibility, those implementations break.
+
+The IETF's solution was practical and a little humiliating: TLS 1.3 was modified to disguise itself as a TLS 1.2 session resumption. The version field in ClientHello says 0x0303 (TLS 1.2). The real version is communicated through a `supported_versions` extension that middleboxes don't inspect. The ChangeCipherSpec message -- which serves no security purpose in TLS 1.3 -- was added back as a compatibility measure.
+
+The protocol the IETF wanted to ship was clean and minimal. The protocol they actually shipped includes compatibility scaffolding to sneak past broken network equipment. It works, but the lesson is stark: you cannot evolve an Internet protocol without accounting for every badly-written parser between point A and point B.
+
+<Callout type="in-practice">
+
+The ossification problem directly influenced QUIC's design. QUIC encrypts nearly all of its transport headers, explicitly to prevent middleboxes from depending on them. The QUIC designers saw what happened with TLS 1.3 and made future ossification structurally impossible by hiding the fields middleboxes would otherwise inspect.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Protocol ossification nearly killed TLS 1.3. The final protocol includes a disguise layer -- it pretends to be TLS 1.2 on the wire -- to survive middleboxes that can't handle change. Deploying security upgrades on the Internet requires negotiating with decades of broken infrastructure.
+
+</Callout>
+
+## Where This Is All Heading
+
+TLS 1.3 was published in 2018. The security landscape hasn't stood still. Three developments extend the trajectory that TLS 1.3 started.
+
+**QUIC and HTTP/3** integrate TLS 1.3 directly into the transport layer. Instead of running TLS on top of TCP (adding the TLS handshake after the TCP handshake), QUIC combines both into a single 1-RTT exchange. The result: a new HTTPS connection over QUIC is faster than a resumed connection over TCP+TLS 1.2. QUIC also eliminates TCP's head-of-line blocking and supports connection migration (your phone switches from WiFi to cellular without dropping the connection). HTTP/3 is defined over QUIC, and already carries a significant share of web traffic.
+
+**Encrypted Client Hello (ECH)** closes the last major plaintext leak in TLS 1.3. Even with TLS 1.3's encrypted handshake, the ClientHello still contains the Server Name Indication (SNI) -- telling any observer which specific site you're connecting to. [ECH](https://datatracker.ietf.org/doc/html/rfc9849) (RFC 9849, published 2025) encrypts the ClientHello under a server public key distributed via DNS. Cloudflare has deployed it across their free tier. Combined with DNS over HTTPS, ECH means a passive observer sees encrypted traffic going to a CDN, but not which website.
+
+**Post-quantum cryptography** is the next inflection point. TLS 1.3's forward secrecy protects against classical key compromise, but not against a quantum computer running Shor's algorithm against the ECDHE key exchange. The industry response is hybrid key exchange: combining classical ECDHE with a post-quantum algorithm (ML-KEM, standardized by NIST in 2024). As of late 2025, over half of human-initiated traffic on Cloudflare's network already uses post-quantum key agreement. The "harvest now, decrypt later" threat is driving urgency: data encrypted today with classical-only key exchange may be decryptable in 10-15 years.
+
+<Mermaid
+  caption="The trajectory from TLS 1.2 to today. Each development extends TLS 1.3's principles: less plaintext, fewer round trips, harder to break retroactively."
+  chart={`graph LR
+    A["TLS 1.2\n2008"] -->|"Removed RSA,\nCBC, custom DH"| B["TLS 1.3\n2018"]
+    B -->|"Integrated into\ntransport layer"| C["QUIC / HTTP/3\n2021"]
+    B -->|"Encrypted\nClientHello"| D["ECH\n2025"]
+    B -->|"Hybrid\nkey exchange"| E["Post-Quantum\n2024+"]
+    C -.- F["1-RTT combined\ntransport + crypto"]
+    D -.- G["No plaintext SNI\nleft to observe"]
+    E -.- H["Safe against\nquantum decryption"]`}
+/>
+
+<Details title="Current TLS version support and deprecation">
+
+- **SSL 2.0, SSL 3.0:** Prohibited (RFC 6176, RFC 7568)
+- **TLS 1.0, TLS 1.1:** Deprecated (RFC 8996, March 2021). All major browsers removed support in 2020.
+- **TLS 1.2:** Still widely deployed. Supported but being gradually phased out. An IETF draft proposes deprecating RSA key exchange even in 1.2.
+- **TLS 1.3:** Current standard. Universal support in modern browsers, CDNs, and TLS libraries.
+- **RFC 9846 (published 2025):** Updated TLS 1.3 specification (rfc8446bis), incorporating errata and clarifications.
+
+</Details>
+
+<Callout type="takeaway">
+
+TLS 1.3 was a foundation, not a destination. QUIC merges TLS into the transport layer. ECH encrypts the last plaintext metadata. Post-quantum crypto protects against future threats. The direction is clear: encrypt everything, expose nothing, assume the attacker is patient.
+
+</Callout>
+
+## What to Remember
+
+- **The handshake is where security lives or dies.** TLS 1.3 reduced it from two round trips to one, encrypted the server certificate, and signed the full transcript. Faster and more secure simultaneously.
+
+- **TLS 1.3 got more secure by removing things.** RSA key exchange, CBC ciphers, custom DH parameters, RC4, PKCS#1 v1.5 signatures, and unsigned cipher negotiation. Each removal killed a specific attack class.
+
+- **Forward secrecy is now mandatory.** Every TLS 1.3 connection uses ephemeral keys. A compromised server key cannot decrypt past sessions. This is the single most important security property of the redesign.
+
+- **0-RTT is a tradeoff, not a freebie.** It saves a round trip for resumed connections but introduces replay risk. Only use it for idempotent requests. Your application layer owns the safety guarantees.
+
+- **Protocol evolution is constrained by deployed infrastructure.** TLS 1.3 had to disguise itself as TLS 1.2 to survive middleboxes. QUIC learned from this and encrypts its headers to prevent future ossification.
+
+### Further Reading
+
+**Start here:**
+
+- Nick Sullivan, [A Detailed Look at RFC 8446](https://blog.cloudflare.com/rfc-8446-aka-tls-1-3/) -- the best overview of TLS 1.3 written for working engineers. Covers security and performance with real deployment context.
+- Trail of Bits, [What Application Developers Need To Know About TLS Early Data (0RTT)](https://blog.trailofbits.com/2019/03/25/what-application-developers-need-to-know-about-tls-early-data-0rtt/) -- essential reading before enabling 0-RTT in production.
+
+**Go deeper:**
+
+- [RFC 8446](https://www.rfc-editor.org/rfc/rfc8446) -- the specification itself. Section 1.2 ("Major Differences from TLS 1.2") is a concise summary of everything that changed.
+- [RFC 7457](https://www.rfc-editor.org/rfc/rfc7457) -- the complete catalog of known TLS attacks as of 2015. Essential context for understanding why TLS 1.3 removed what it removed.
+- Cremers et al., [Automated Analysis and Verification of TLS 1.3](https://ieee-security.org/TC/SP2016/papers/0824a470.pdf) -- the Tamarin proof that TLS 1.3's handshake actually achieves the security properties it claims.
+- Nick Sullivan, [Why TLS 1.3 isn't in browsers yet](https://blog.cloudflare.com/why-tls-1-3-isnt-in-browsers-yet/) -- the protocol ossification story, told by someone who lived through the deployment.
