@@ -7,15 +7,19 @@ interface Props {
   date: Date;
   tags: string[];
   readTime: string;
+  headings: Array<{ depth: number; slug: string; text: string }>;
 }
 
-const { title, subtitle, date, tags, readTime } = Astro.props;
+const { title, subtitle, date, tags, readTime, headings } = Astro.props;
 
 const formattedDate = date.toLocaleDateString("en-US", {
   year: "numeric",
   month: "long",
   day: "numeric",
 });
+
+const tocHeadings = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const showToc = tocHeadings.length >= 2;
 ---
 
 <Base
@@ -24,11 +28,11 @@ const formattedDate = date.toLocaleDateString("en-US", {
   canonicalPath={Astro.url.pathname}
   ogType="article"
 >
-  <article class="py-12 sm:py-16">
+  <article class="py-12 sm:py-16" id="blog-article">
     <header class="mb-10 sm:mb-14 max-w-[720px] mx-auto">
       <a
         href="/writing"
-        class="inline-flex items-center gap-1.5 font-ui text-xs text-ink-muted no-underline hover:text-accent transition-colors duration-250 mb-6 group"
+        class="inline-flex items-center gap-1.5 font-ui text-xs text-ink-muted no-underline hover:text-accent transition-colors duration-250 mb-6 group py-2 -my-2"
       >
         <span class="transition-transform duration-250 group-hover:-translate-x-0.5">&larr;</span>
         Writing
@@ -43,7 +47,7 @@ const formattedDate = date.toLocaleDateString("en-US", {
 
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-5 font-ui text-xs text-ink-muted">
         <time datetime={date.toISOString()}>{formattedDate}</time>
-        <span class="hidden sm:inline">&middot;</span>
+        <span>&middot;</span>
         <span>{readTime} read</span>
       </div>
 
@@ -58,10 +62,57 @@ const formattedDate = date.toLocaleDateString("en-US", {
       )}
     </header>
 
+    {showToc && (
+      <details class="toc-mobile" id="toc-mobile">
+        <summary class="toc-mobile__summary">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" class="toc-mobile__icon">
+            <path d="M2.5 4h11M2.5 8h7M2.5 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          On this page
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" class="toc-mobile__chevron">
+            <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <nav class="toc-mobile__nav" aria-label="Table of contents">
+          <ul class="toc-list">
+            {tocHeadings.map((h) => (
+              <li class={h.depth === 3 ? "toc-item toc-item--sub" : "toc-item"}>
+                <a href={`#${h.slug}`} class="toc-link" data-toc-id={h.slug}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </details>
+    )}
+
     <div class="prose">
       <slot />
     </div>
   </article>
+
+  {showToc && (
+    <button class="back-to-top" id="back-to-top" aria-label="Back to top">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <path d="M7 12V2M7 2L2.5 6.5M7 2L11.5 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Top
+    </button>
+  )}
+
+  {showToc && (
+    <aside class="toc-desktop" id="toc-desktop" aria-label="Table of contents">
+      <p class="toc-desktop__title">On this page</p>
+      <nav>
+        <ul class="toc-list">
+          {tocHeadings.map((h) => (
+            <li class={h.depth === 3 ? "toc-item toc-item--sub" : "toc-item"}>
+              <a href={`#${h.slug}`} class="toc-link" data-toc-id={h.slug}>{h.text}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </aside>
+  )}
 
   <script is:inline>
     (function() {
@@ -72,6 +123,16 @@ const formattedDate = date.toLocaleDateString("en-US", {
           wrapper.className = 'table-wrapper';
           table.parentNode.insertBefore(wrapper, table);
           wrapper.appendChild(table);
+        });
+        document.querySelectorAll('.prose .table-wrapper').forEach(function(wrapper) {
+          function checkScroll() {
+            var atEnd = wrapper.scrollLeft + wrapper.clientWidth >= wrapper.scrollWidth - 2;
+            wrapper.classList.toggle('scrolled-end', atEnd);
+            var noOverflow = wrapper.scrollWidth <= wrapper.clientWidth;
+            wrapper.classList.toggle('scrolled-end', atEnd || noOverflow);
+          }
+          wrapper.addEventListener('scroll', checkScroll, { passive: true });
+          checkScroll();
         });
       }
 
@@ -107,15 +168,93 @@ const formattedDate = date.toLocaleDateString("en-US", {
             clusterBorder: resolveColor('oklch(48% 0.10 150 / 0.4)'),
             titleColor: resolveColor('oklch(22% 0.015 160)'),
             fontFamily: '"Libre Franklin", sans-serif',
-            fontSize: '14px',
+            fontSize: window.innerWidth < 640 ? '16px' : '14px',
           },
         });
         await mermaid.run({ nodes: mermaidDivs });
       }
 
+      var tocObserver = null;
+      var scrollHandler = null;
+
+      function initToc() {
+        if (tocObserver) tocObserver.disconnect();
+        if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+
+        var headings = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+        var tocLinks = document.querySelectorAll('.toc-link[data-toc-id]');
+        var desktopToc = document.getElementById('toc-desktop');
+        var backToTop = document.getElementById('back-to-top');
+        var mobileToc = document.getElementById('toc-mobile');
+        var article = document.getElementById('blog-article');
+
+        if (headings.length === 0 || tocLinks.length === 0) return;
+
+        var activeId = null;
+        var ticking = false;
+
+        function setActive(id) {
+          if (id === activeId) return;
+          activeId = id;
+          tocLinks.forEach(function(link) {
+            var isActive = link.getAttribute('data-toc-id') === id;
+            link.classList.toggle('is-active', isActive);
+          });
+        }
+
+        function onScroll() {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(function() {
+            ticking = false;
+            var scrollY = window.scrollY + 100;
+            var best = null;
+            headings.forEach(function(h) {
+              if (h.offsetTop <= scrollY) best = h.id;
+            });
+            if (best) setActive(best);
+
+            if (desktopToc) {
+              var prose = document.querySelector('.prose');
+              if (prose) {
+                var proseRect = prose.getBoundingClientRect();
+                var tocRect = desktopToc.getBoundingClientRect();
+                var shouldShow = proseRect.top < window.innerHeight && proseRect.bottom > tocRect.bottom;
+                desktopToc.classList.toggle('is-visible', shouldShow);
+              }
+            }
+
+            if (backToTop && mobileToc) {
+              var tocBottom = mobileToc.getBoundingClientRect().bottom;
+              backToTop.classList.toggle('is-visible', tocBottom < 0);
+            }
+          });
+        }
+
+        scrollHandler = onScroll;
+
+        if (backToTop) {
+          backToTop.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+        }
+        window.addEventListener('scroll', scrollHandler, { passive: true });
+        onScroll();
+
+        tocLinks.forEach(function(link) {
+          link.addEventListener('click', function(e) {
+            var mobileDetails = document.getElementById('toc-mobile');
+            if (mobileDetails && mobileDetails.open) {
+              mobileDetails.open = false;
+            }
+          });
+        });
+      }
+
       function init() {
         wrapTables();
         initMermaid();
+        initToc();
       }
 
       init();

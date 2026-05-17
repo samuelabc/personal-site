@@ -16,22 +16,57 @@
       >&rarr;</span
     >
   </a>
+  <p class="mt-6 text-sm text-ink-muted font-body">
+    Or find me on
+    <a
+      href="https://github.com/samuelabc"
+      target="_blank"
+      rel="noopener noreferrer"
+      data-track-event="external-link"
+      data-external-url="https://github.com/samuelabc"
+      data-external-label="GitHub"
+      class="text-ink-soft no-underline transition-colors duration-250 hover:text-accent"
+    >GitHub</a> and
+    <a
+      href="https://linkedin.com/in/samuel-thien-18b9071ab"
+      target="_blank"
+      rel="noopener noreferrer"
+      data-track-event="external-link"
+      data-external-url="https://linkedin.com/in/samuel-thien-18b9071ab"
+      data-external-label="LinkedIn"
+      class="text-ink-soft no-underline transition-colors duration-250 hover:text-accent"
+    >LinkedIn</a>.
+  </p>
 </section>
 
 <script>
   import { POSTHOG_EVENTS, capturePostHogEvent } from "../data/analytics";
 
   function initContactTracking() {
-    const link = document.querySelector<HTMLAnchorElement>('a[data-track-event="contact-click"]');
-    if (!link || link.dataset.analyticsBound === "1") return;
-    link.dataset.analyticsBound = "1";
-
-    link.addEventListener("click", () => {
-      capturePostHogEvent(POSTHOG_EVENTS.CONTACT_CLICK, {
-        cta: "say_hello",
-        location: "contact_section",
+    const emailLink = document.querySelector<HTMLAnchorElement>('a[data-track-event="contact-click"]');
+    if (emailLink && emailLink.dataset.analyticsBound !== "1") {
+      emailLink.dataset.analyticsBound = "1";
+      emailLink.addEventListener("click", () => {
+        capturePostHogEvent(POSTHOG_EVENTS.CONTACT_CLICK, {
+          cta: "say_hello",
+          location: "contact_section",
+        });
       });
-    });
+    }
+
+    document
+      .querySelectorAll<HTMLAnchorElement>('#contact a[data-track-event="external-link"]')
+      .forEach((link) => {
+        if (link.dataset.analyticsBound === "1") return;
+        link.dataset.analyticsBound = "1";
+        link.addEventListener("click", () => {
+          capturePostHogEvent(POSTHOG_EVENTS.EXTERNAL_LINK_CLICK, {
+            url: link.dataset.externalUrl,
+            label: link.dataset.externalLabel,
+            location: "contact_section",
+          });
+        });
+      });
   }
 
   initContactTracking();
