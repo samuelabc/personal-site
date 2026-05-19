@@ -1,0 +1,516 @@
+---
+title: "Authorization Is a Graph Problem (And Most Teams Solve It Like a Table Problem)"
+subtitle: "From Zanzibar to Cedar — a structural tour of how modern authorization actually works, where each approach breaks, and which tradeoffs you're really making"
+date: 2026-05-23
+tags: ["authorization", "distributed-systems", "zanzibar", "security", "system-design"]
+readTime: "18 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## The `if` Statement That Ate Your Architecture
+
+It always starts the same way.
+
+You're building a SaaS product. Users belong to organizations. Organizations have admins and members. Members can view documents, admins can edit them. Simple. You write an `if` statement. Maybe two.
+
+Six months later, someone asks: "Can we let users share a document with people outside their org?" Then: "Can we have view-only links?" Then: "Can we make admins for just one project, not the whole org?"
+
+Your authorization code is now sprayed across 40 endpoints, lives in three languages (because microservices), and the one engineer who understood the permission inheritance model left in January. When a customer asks "why can't I see this document?", the honest answer is: nobody knows.
+
+This is the authorization problem. And it's not a security problem. It's a data modeling problem disguised as an access control problem. The question isn't "how do I check permissions?" The question is: *what is the shape of the data that determines who can do what?*
+
+That question has a surprisingly deep answer, and the last seven years of industry evolution have produced a taxonomy of structural approaches that most teams never see, because they're too busy wrestling with their `if` statements.
+
+<Callout type="takeaway">
+
+Authorization isn't a security feature you bolt on. It's a data modeling problem that determines your product's ceiling.
+
+</Callout>
+
+## What You Probably Believe vs. What's Actually True
+
+Before diving into the systems, let's clear the table. Authorization carries more accumulated misconceptions than almost any other infrastructure concern, because every team builds it from scratch and most teams only build it once.
+
+| Common Belief | Reality | Why It Matters |
+|---|---|---|
+| RBAC is simple and good enough | RBAC works until you need per-resource permissions. Then you get "role explosion": thousands of roles like `admin-project-17-readonly` | You'll rebuild your permission system 18 months in, when your product needs fine-grained sharing |
+| Authorization is just checking permissions | Authorization is three problems: modeling (what relationships exist), storage (where the data lives), and evaluation (how checks are computed) | Teams who treat it as one problem end up with evaluation logic that embeds the data model, making both impossible to change |
+| Centralize everything in one service | Authorization data and application data overlap heavily. Centralizing means duplicating your app data or syncing it, both operationally expensive | Airbnb, Carta, and Reddit all centralized, but each had to solve the sync problem differently |
+| Zanzibar is the answer | Zanzibar is one structural approach (relationship graphs). Cedar is another (policy evaluation). OPA is a third (general-purpose rules). They solve different shapes of the problem | Picking Zanzibar because Google uses it is like picking Spanner because Google uses it. The question is whether your problem has the same shape |
+| The hard part is the check API | The hard part is the *list* API. Checking "can user X do Y to resource Z?" is fast. Answering "which resources can user X see?" requires graph traversal or materialized views | Your product's UX depends on listing resources. The check API is table stakes; filtered listing is where systems diverge |
+
+<Callout type="takeaway">
+
+Most teams' mental model of authorization is shaped by whichever system they built first. The real landscape is structural, not incremental.
+
+</Callout>
+
+## A Structural Taxonomy: Three Shapes of Authorization
+
+Every authorization system in production today maps to one of three structural approaches, or a hybrid. The differences aren't about features. They're about the underlying data structure each system uses to represent permissions.
+
+**Tables: Role-based and attribute-based systems.** The authorization data lives in rows. A user has roles (RBAC) or attributes (ABAC), and a policy engine evaluates rules against those flat properties. The canonical systems here are NIST RBAC (2001) and XACML/OPA for ABAC. Authorization checks are predicate evaluation: "does this user's set of properties satisfy this rule?"
+
+**Graphs: Relationship-based systems.** The authorization data is a directed graph of relationships between entities. A user is a member of a team, the team owns a project, the project contains a document. "Can this user view this document?" becomes a graph traversal. Google Zanzibar (2019) is the foundational system. SpiceDB, OpenFGA, and Permify are open-source implementations.
+
+**Trees: Policy-language systems.** The authorization logic is expressed as a structured policy language with formal semantics. AWS Cedar is the exemplar: policies are evaluated against a request context, with formal guarantees about determinism and analyzability. The authorization "data" is the policy itself, not a separate store.
+
+These aren't marketing categories. They're structural differences in how the system answers the fundamental question: "given this request, is it allowed?" Tables do a lookup. Graphs do a traversal. Trees do an evaluation.
+
+Most real systems are hybrids. Google's internal Zanzibar uses relationship graphs for the core model but allows computed usersets (essentially policy rules embedded in the graph schema). Cedar supports entity hierarchies alongside flat policies. But understanding the primary data structure tells you where the system will be strong and where it'll struggle.
+
+<Callout type="definition">
+
+**Relationship-Based Access Control (ReBAC)**: An authorization model where permissions are derived from the graph of relationships between entities. "User X can edit Document Y" is not stored directly; instead, the system stores "X is a member of Team A" and "Team A owns Project B" and "Document Y is in Project B," then traverses the graph to compute the answer.
+
+</Callout>
+
+<Callout type="definition">
+
+**Attribute-Based Access Control (ABAC)**: An authorization model where access decisions are computed by evaluating rules against the attributes of the subject, resource, action, and environment. Unlike RBAC (which assigns fixed roles), ABAC can express arbitrary conditions: "allow if user.department == resource.department AND time.hour &lt; 18."
+
+</Callout>
+
+<Mermaid
+  caption="The three structural approaches to authorization, classified by their underlying data structure. Every production system is primarily one of these, with optional hybrid elements."
+  chart={`graph LR
+    A["Authorization\nRequest"] --> B{"Primary\nData Structure?"}
+    B -->|"Rows"| C["Table Systems\n(RBAC/ABAC)"]
+    B -->|"Edges"| D["Graph Systems\n(ReBAC/Zanzibar)"]
+    B -->|"Rules"| E["Policy Systems\n(Cedar/OPA)"]
+    C --> F["Predicate\nevaluation"]
+    D --> G["Graph\ntraversal"]
+    E --> H["Policy\nevaluation"]`}
+/>
+
+<Callout type="takeaway">
+
+Tables do lookups, graphs do traversals, policy trees do evaluation. Your authorization model's data structure determines its strengths and failure modes.
+
+</Callout>
+
+<Details title="A brief history: Unix to Zanzibar">
+
+Authorization models evolved through distinct eras driven by production failures:
+
+**1970s, Unix DAC.** Owner/group/world permissions. Worked for single machines. Failed when organizations needed more than three permission levels.
+
+**1990s, RBAC.** NIST standardized role-based access control in 2001. Roles aggregate permissions. Worked beautifully for enterprise software with stable org charts. Failed when products needed per-resource permissions (leading to role explosion).
+
+**2000s, ABAC/XACML.** Attribute-based systems addressed role explosion by making policies dynamic. Worked for complex enterprise rules. Failed because XACML was so complex that most implementations were incomplete or incorrect.
+
+**2010s, ReBAC/Zanzibar.** Google published the Zanzibar paper in 2019, formalizing the relationship graph approach they'd been running internally. This was driven by a specific production need: Google needed unified authorization across Calendar, Drive, Photos, YouTube, and Cloud, services with fundamentally different sharing models.
+
+Each era's model didn't replace the previous one. It addressed the specific failure mode that scaled the previous model into a wall.
+
+</Details>
+
+## Inside Zanzibar: The Graph That Guards Google
+
+The 2019 Zanzibar paper is one of those rare systems papers that spawned an entire ecosystem. Understanding its core design choices explains why every open-source Zanzibar clone works the way it does.
+
+**The data model is relation tuples.** Everything in Zanzibar is a tuple: `object#relation@user`. "Document X's viewer is User Y" becomes `doc:X#viewer@user:Y`. "Document X's viewer is anyone who's a member of Team Z" becomes `doc:X#viewer@team:Z#member`. That second form, where the user position references another relation, is what makes Zanzibar a graph, not a table. Permissions compose through these references.
+
+**Namespace configurations define the schema.** Each resource type (document, folder, team) has a namespace config that declares which relations exist and how they compose. This is where you express "editors are also viewers" or "a document inherits its folder's permissions." The schema is the type system for your permission graph.
+
+**Two APIs do all the work.** `Check(object, relation, user)` answers "can this user do this?" by traversing the graph from the object through its relations. `Expand(object, relation)` returns the full tree of users who have a given relation, useful for debugging and UI.
+
+**Consistency is the hard part.** This is what separates Zanzibar from a naive graph database with permission tuples. Zanzibar provides external consistency: if a user removes a collaborator and then uploads a secret document, the system guarantees the removed collaborator cannot see the document, even if the permission change hasn't fully propagated. This is the New Enemy Problem, and solving it required Google's investment in Spanner's TrueTime.
+
+<Callout type="gotcha">
+
+**The New Enemy Problem**: If you remove someone's access and then update a resource, an eventually-consistent system might evaluate the access check against stale permissions, granting the removed user access to the new content. Zanzibar solves this with "zookies," consistency tokens that ensure permission checks are at least as fresh as the most recent write the client has seen. SpiceDB calls these ZedTokens.
+
+</Callout>
+
+<Mermaid
+  caption="A Zanzibar permission graph. Solid edges are stored tuples. Dashed edges are computed from the namespace config. Alice can view the doc because she's a member of engineering, which owns atlas, which is the doc's parent."
+  chart={`graph LR
+    U1["user:alice"] -->|"member"| T1["team:engineering"]
+    T1 -->|"owner"| P1["project:atlas"]
+    P1 -->|"parent"| D1["doc:design-spec"]
+    D1 -.->|"viewer = parent.owner\n(computed)"| U1
+
+    U2["user:bob"] -->|"viewer"| D1
+    U3["user:carol"] -->|"editor"| D1
+    D1 -.->|"viewer = editor\n(implied)"| U3`}
+/>
+
+<Callout type="in-practice">
+
+**Zanzibar's scale numbers**: In production at Google since 2016, the system handles trillions of stored tuples, millions of authorization checks per second, with p95 latency under 10ms and availability above 99.999%. These numbers aren't just bragging rights. They demonstrate that graph traversal for authorization can be fast if the graph is indexed correctly.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Zanzibar's power comes from composable relation tuples, not from the check algorithm, which is just graph traversal. The data model is the innovation.
+
+</Callout>
+
+<Details title="The Leopard indexing system and content-change ACLs">
+
+The Zanzibar paper describes Leopard, an internal indexing system that pre-computes group membership expansions for performance. Leopard maintains denormalized snapshots of "which users are in which groups" so that deeply nested group hierarchies don't require live graph traversal on every check.
+
+Content-change ACLs are Zanzibar's mechanism for the New Enemy Problem. When a resource is modified, the system stores a "content-change ACL" that records which Zanzibar snapshot was current at the time of the content change. Future permission checks against that resource must use a snapshot at least as recent as the content-change ACL. This ensures removed users can't access content that was added after their access was revoked.
+
+Neither of these subsystems is trivially reproducible outside Google. Leopard relies on Spanner's global consistency guarantees, and content-change ACLs require tight integration between the authorization system and the application's write path. This is why open-source implementations handle consistency differently, and why understanding the tradeoff spectrum matters.
+
+</Details>
+
+---
+
+## The Open-Source Zanzibar Family
+
+The Zanzibar paper launched an entire category. Here's how the major implementations differ, not in features, but in architectural bets.
+
+<Mermaid
+  caption="The Zanzibar family tree. Each project makes different architectural bets while sharing the core relation-tuple model."
+  chart={`graph LR
+    Z["Google Zanzibar\n(2019 paper)"] --> S["SpiceDB\n(AuthZed)"]
+    Z --> O["OpenFGA\n(Okta/Auth0)"]
+    Z --> P["Permify\n(FusionAuth)"]
+    Z --> K["Ory Keto"]
+    S -.-> S1["Closest to paper\nZedTokens for consistency"]
+    O -.-> O1["CNCF Incubating\nBroadest SDK ecosystem"]
+    P -.-> P1["Visual playground\nYAML schema"]
+    K -.-> K1["Part of Ory ecosystem\nSelf-hosted identity stack"]`}
+/>
+
+<Details title="Detailed comparison: SpiceDB vs. OpenFGA vs. Permify">
+
+**SpiceDB** is the most faithful Zanzibar implementation. Its schema language maps closely to Zanzibar's namespace configs. ZedTokens solve the New Enemy Problem. It supports Spanner, CockroachDB, PostgreSQL, and MySQL as backends. The Watch API enables cache invalidation patterns. If you're reading the Zanzibar paper and want to use it directly, SpiceDB is the closest match. Apache 2.0 license. 6,500+ GitHub stars.
+
+**OpenFGA** is the CNCF bet. Backed by Okta (Auth0), it's now a CNCF Incubating project with 2,300+ contributors and adoption at Canonical, Docker, Grafana Labs, and Sourcegraph. Its DSL is slightly more approachable than SpiceDB's for teams not steeped in the Zanzibar paper. Eight language SDKs. If your stack is Kubernetes-native and you want ecosystem gravity, OpenFGA is the pragmatic choice.
+
+**Permify** prioritizes developer experience with a visual playground and YAML-based schema. Recently acquired by FusionAuth, giving it commercial backing and integration with FusionAuth's identity platform. Built-in data filtering (LookupEntity) is more polished than competitors. If you value rapid iteration and visual debugging over Zanzibar-paper fidelity, Permify is worth evaluating.
+
+All three are written in Go and expose gRPC + REST APIs.
+
+</Details>
+
+## Cedar: The Formally Verified Alternative
+
+Cedar represents a fundamentally different structural bet. Where Zanzibar says "authorization is a graph problem," Cedar says "authorization is a logic problem, and logic should be provable."
+
+Developed by AWS and published in 2024, Cedar is an authorization policy language designed for three properties that Zanzibar doesn't prioritize:
+
+**Formal verification.** Cedar policies can be mechanically analyzed for properties like "no policy in this set ever grants admin access to users outside the org." The Cedar team formalized the language in Lean and proved correctness properties. They found 25 bugs during the verification process: 4 in the policy validator and 21 through differential random testing. That's not a QA win; that's a statement about the limits of testing alone for authorization logic.
+
+**Analyzability.** Because Cedar's semantics are deterministic (default deny, forbid wins, no policy ordering), you can answer questions like: "Are these two policy sets equivalent?" "Does adding this policy change who can access what?" "Is there any request that this policy would deny that the old set would allow?" Zanzibar-style systems can't answer these questions because the authorization logic is entangled with the runtime graph state.
+
+**Readability.** Cedar policies read like structured English:
+
+<p class="code-caption">A Cedar policy granting view access to engineers on a project folder</p>
+
+```text
+permit(
+  principal in Group::"engineering",
+  action == Action::"view",
+  resource in Folder::"project-atlas"
+);
+```
+
+Compare that to Zanzibar's schema definitions, which require understanding userset rewrites and computed relations.
+
+Cedar's tradeoff is that it doesn't natively handle deeply nested relationship traversals. If your permission model is "user is a member of a team that owns a project that contains a folder that holds a document," Cedar needs the application to resolve that hierarchy before evaluation. Zanzibar handles that traversal natively.
+
+<Mermaid
+  caption="Cedar's evaluation model. Requests are evaluated against policy and entity stores. Default deny means no permit = deny. Forbid always wins over permit, regardless of ordering."
+  chart={`graph LR
+    R["Request\n{principal, action,\nresource, context}"] --> E["Cedar\nEvaluation"]
+    P["Policy Store\n(analyzable)"] --> E
+    S["Entity Store\n(hierarchy)"] --> E
+    E --> D{"Default Deny"}
+    D -->|"permit matches\nno forbid"| A["ALLOW"]
+    D -->|"forbid matches\nOR no permit"| B["DENY"]`}
+/>
+
+<Callout type="in-practice">
+
+**Where Cedar shines**: Cedar is the authorization engine behind AWS Verified Permissions and Amazon Verified Access. In regulated industries (healthcare, finance), the ability to formally prove "no policy in this set grants cross-tenant access" can eliminate entire classes of compliance audits. This is a different value proposition than Zanzibar's performance at scale.
+
+</Callout>
+
+<Callout type="gotcha">
+
+**Cedar's blind spot**: Cedar evaluates policies against a request context, but it doesn't manage relationship data. If your permission model requires "traverse the org hierarchy to find the user's effective permissions," your application must resolve that hierarchy and pass it as context. In Zanzibar systems, the traversal is the product.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Cedar trades graph traversal power for formal guarantees. If you can prove your policies are correct, you don't need to test every edge case, which matters enormously for compliance-heavy environments.
+
+</Callout>
+
+<Details title="Verification-guided development: how Cedar was built">
+
+The Cedar team used verification-guided development (VGD): building the Lean formalization alongside the Rust implementation and proving properties about the formal model, then using differential random testing to verify the implementation matches.
+
+The 25 bugs found break down:
+- 4 bugs in the policy validator found during proof work
+- 21 bugs found through differential random testing between the Lean model and the Rust implementation
+
+None of these bugs would have been caught by conventional unit tests. They were subtle interactions between policy features that only manifested with specific combinations of principals, resources, and policy structures. This is the strongest published evidence that authorization logic benefits from formal methods. The combinatorial space of "who can do what to which resource under what conditions" is too large for example-based testing to cover.
+
+</Details>
+
+## OPA: The Swiss Army Knife (And Why That's a Problem)
+
+Open Policy Agent occupies an interesting position in the taxonomy. It's not an authorization system. It's a general-purpose policy engine that people use for authorization because nothing better existed when they needed it.
+
+OPA's strength is exactly its generality. Rego (its policy language, a Datalog descendant) can express any computable policy. Kubernetes admission control? OPA. API rate limiting? OPA. Authorization? Also OPA. This generality made it the default choice for teams that already ran it for infrastructure policies.
+
+But OPA's generality is also its authorization weakness:
+
+**No relationship model.** OPA evaluates policies against JSON input. If your authorization requires graph traversal (team membership, folder hierarchies, inherited permissions), your application must resolve the graph and feed it as input. OPA doesn't traverse; it evaluates.
+
+**Rego's learning curve.** Rego is based on Datalog, which is powerful but unfamiliar to most application developers. Cedar was explicitly designed as a reaction to this: "a policy language that developers can read without learning logic programming."
+
+**Performance at policy scale.** OPA works well with fewer than 10,000 policies. Above that, evaluation latency and memory usage scale in ways that Zanzibar-style systems (which scale with relationships, not rules) avoid. Real-world deployments see 1-5ms for simple evaluations, but complex policy bundles can push p99 latency significantly higher.
+
+OPA remains the right choice for infrastructure policy (Kubernetes admission, Terraform plan validation, CI/CD gate checks) where policies are relatively few and the input is a single JSON document. For application authorization with millions of resources and complex permission hierarchies, purpose-built systems outperform it.
+
+<Callout type="gotcha">
+
+**The sidecar trap**: OPA typically runs as a sidecar alongside your application. If OPA crashes, your authorization system fails. If you add a fallback policy ("allow when OPA is down"), you've created a security bypass. If you add "deny when OPA is down," a sidecar crash takes down your application. There's no free lunch here, but purpose-built authorization systems (SpiceDB, OpenFGA) handle clustering and failover as core design concerns rather than afterthoughts.
+
+</Callout>
+
+<Callout type="takeaway">
+
+OPA is a policy engine, not an authorization engine. It's great at "does this Kubernetes deployment meet our standards?" and mediocre at "which of these 50,000 documents can this user see?"
+
+</Callout>
+
+---
+
+## The Real Hard Problem: Where Does the Data Live?
+
+We've covered three structural approaches (graphs, policies, general rules). None of them answer the question that actually keeps engineers up at night: where does the authorization data live relative to the application data?
+
+This is the Venn diagram problem. Authorization data and application data overlap. "User X belongs to Organization Y" is both an application fact (shown in the UI, used for billing) and an authorization fact (determines what X can access). When you centralize authorization in an external service, you must decide what happens to this overlapping data.
+
+**Option 1: Duplicate it.** Send all authorization-relevant data to the authorization service. This is what Zanzibar-style systems expect. You write tuples to SpiceDB/OpenFGA whenever your application state changes. The cost is the synchronization burden: every application write that affects permissions must also write to the authorization store, and you need to handle failures in either write without creating inconsistency.
+
+**Option 2: Query it at decision time.** The authorization service calls back into your application for data it needs. This avoids duplication but introduces latency (network round-trips) and circular dependencies (your app calls the auth service, which calls your app back).
+
+**Option 3: Keep it embedded.** Don't externalize authorization. Evaluate permissions in-process using your application's own database. Oso's "local authorization" model takes this approach. The trade-off is that you lose the centralization benefits (unified audit logs, cross-service consistency) and your authorization logic is tightly coupled to your data layer.
+
+There's no clean answer. Airbnb (Himeji) chose option 1 and invested heavily in synchronization infrastructure. Carta chose option 1 with a custom tuple store. Teams using Cedar often lean toward option 3 with periodic policy analysis.
+
+The structural insight: your choice of authorization system constrains which option is practical. Zanzibar systems assume option 1. Policy systems (Cedar, OPA) can work with options 2 or 3. Embedded systems (Oso local, Cerbos sidecar) default to option 3.
+
+<Mermaid
+  caption="The data synchronization challenge. Application data and authorization data overlap. The dashed lines represent the synchronization burden that every centralized authorization system must handle."
+  chart={`graph TD
+    subgraph "Application Layer"
+      APP["Application\nDatabase"]
+      SVC["Application\nService"]
+    end
+
+    subgraph "Authorization Layer"
+      AUTH["Authorization\nService"]
+      STORE["Authorization\nData Store"]
+    end
+
+    SVC -->|"1. Check permission"| AUTH
+    AUTH -->|"2. Evaluate"| STORE
+    SVC -.->|"Sync: write tuples\non state change"| STORE
+    APP -.->|"The overlap:\napp data that's\nalso auth data"| STORE`}
+/>
+
+<Callout type="in-practice">
+
+**Airbnb's approach**: Himeji moved authorization checks from presentation services to data services and created a centralized, tuple-based permission system. By March 2021, it processed 850K entities/second with 99.999% availability and 12ms p99 latency. The investment was enormous: a dedicated infrastructure team, a custom synchronization pipeline, and a multi-year migration.
+
+</Callout>
+
+<Callout type="gotcha">
+
+**The sync failure mode nobody talks about**: When authorization data is synchronized from the application database, failures in the sync pipeline create a specific class of bug: permissions that are correct in the application but wrong in the authorization service. The symptom is "the UI says I have access but I get 403" or worse, "the UI says access was revoked but the API still allows it." These bugs are invisible to standard monitoring because both systems individually report healthy.
+
+</Callout>
+
+<Callout type="takeaway">
+
+The choice of where authorization data lives relative to application data is the most consequential architectural decision, more so than which authorization model you use.
+
+</Callout>
+
+## The Problem Nobody Warns You About: Listing Authorized Resources
+
+Every authorization system's marketing page shows the check API: `Check(user, permission, resource) → bool`. That's the easy part.
+
+The hard problem is the reverse: "Show me all documents this user can access." This is the list API, and it's where the structural differences between authorization models become performance-critical.
+
+**In table systems (RBAC):** This is a SQL query with a JOIN. Fast, well-understood, and your database already has indexes for it. It's one reason RBAC persists despite its limitations. Listing resources is trivially efficient.
+
+**In graph systems (Zanzibar):** This requires LookupResources, essentially traversing the permission graph in reverse to find all resources reachable from a given user. SpiceDB's LookupResources shows ~100ms latency for systems with 100-250K relationships and 3-5 levels of graph nesting. That latency grows with relationship volume and graph depth.
+
+**In policy systems (Cedar/OPA):** This is essentially unsolvable without pre-computation. You'd need to evaluate every policy against every resource for a given user. Nobody does this in real time. Instead, you maintain materialized views or use the application database for listing and the policy engine only for individual checks.
+
+The practical implication: if your product's primary UI is a resource list (think Google Drive, Notion, GitHub), the list API's performance determines your user experience. Checking permissions on a click is table stakes. Rendering a filtered, permission-aware list of 10,000 resources in under 200ms is the real engineering challenge.
+
+<Mermaid
+  caption="How each authorization model handles resource listing. Tables are fastest because authorization data is co-located with application data. Graph systems are slower but handle complex hierarchies. Policy systems require pre-computation."
+  chart={`graph LR
+    Q["'Show me\nmy documents'"] --> A{"Authorization\nModel?"}
+    A -->|"Table\n(RBAC)"| B["SQL JOIN\n~5ms"]
+    A -->|"Graph\n(ReBAC)"| C["LookupResources\n~100ms"]
+    A -->|"Policy\n(Cedar/OPA)"| D["Materialized view\nor post-filter"]
+    C --> C1["Grows with\ngraph depth"]
+    D --> D1["Stale by\ndesign"]`}
+/>
+
+<Callout type="in-practice">
+
+**SpiceDB's three-pronged approach**: SpiceDB offers three strategies for list endpoints: (1) LookupResources for moderate result sets (under 10K), (2) CheckBulkPermissions for post-filtering large candidate sets, and (3) a separate Materialize service that pre-computes permission results. The existence of three strategies for one problem tells you something about the fundamental difficulty.
+
+</Callout>
+
+<Callout type="gotcha">
+
+**The pagination trap**: When post-filtering resources for permissions, your "page size" from the database might yield zero authorized results after filtering. A request for "page 1, 20 items" might need to scan hundreds of database rows to find 20 the user can actually see. This creates unpredictable latency and is especially painful for users with restricted access browsing large resource sets.
+
+</Callout>
+
+<Callout type="takeaway">
+
+The check API is solved. The list API is where authorization systems actually diverge. Your product UX depends on it.
+
+</Callout>
+
+## Production War Stories: What Breaks and Why
+
+The clearest signal about where authorization systems struggle comes from the teams that have deployed them at scale. Here are the failure patterns that appear repeatedly.
+
+**Graph depth explosions.** Reddit's ads platform needed multi-level permission inheritance: ad accounts contain campaigns contain ad groups. Deeply nested hierarchies turn a simple check into a multi-hop graph traversal. SpiceDB defaults to max depth 50, but even 5-6 levels deep with wide fan-out (a team with 500 members owns 200 projects each containing 1,000 documents) can push check latency above acceptable thresholds. The fix is schema design discipline: keeping inheritance shallow and preferring direct relationships where possible.
+
+**The 65,000-query catastrophe.** Apache Polaris hit 30+ second latency on permission checks because the authorization layer performed 65,000 sequential database scans, reading 13.7 billion rows without proper indexing. The lesson isn't "indexing matters" (everyone knows that). The lesson is that authorization's query patterns are different from your application's patterns. If you're using your application database for authorization checks, your indexes are probably optimized for application queries, not permission traversals.
+
+**The Auth0 cascade.** In April 2021, Auth0's feature flag service went down, and cache invalidation caused all API nodes to fall back to direct database queries simultaneously. Authentication latency spiked 100x. The lesson for authorization: every caching layer in your permission pipeline is a consistency trade-off. When the cache fails, the thundering herd against your permission store can cascade into a full outage.
+
+**Denial latency asymmetry.** Teams commonly optimize the allow path (permission granted, proceed) but ignore the deny path. In graph-based systems, denials can be slower than allows because the system must traverse the entire reachable graph before concluding "no path exists." If denied users (who might be attackers probing your system) create more load than permitted users, you have a denial-of-service vector hiding in your authorization system.
+
+<Callout type="gotcha">
+
+**The monitoring blind spot**: Standard application monitoring tracks request latency and error rates. But authorization has a unique failure mode: silent incorrectness. A permission check that returns "allow" when it should return "deny" doesn't trigger any alert. You need separate monitoring for authorization correctness: audit logs that track unexpected grants, periodic reconciliation between the authorization store and application state, and synthetic checks that verify known-denied users stay denied.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Authorization failures are rarely about the algorithm. They're about schema design, index alignment, cache invalidation, and the asymmetry between allow and deny paths.
+
+</Callout>
+
+---
+
+## Choosing Your Authorization Architecture: A Decision Framework
+
+Enough theory. Here's how to pick.
+
+The decision isn't "which system is best." It's "which structural approach matches the shape of your authorization problem." And that shape is determined by three questions:
+
+**How complex is your permission hierarchy?** If your permissions are flat (users have roles, roles have permissions), RBAC works and you should use it. If your permissions are relational (users belong to teams that own projects that contain resources), you need a graph system. If your permissions involve arbitrary conditions (allow if attribute X AND context Y AND NOT exception Z), you need a policy system.
+
+**Is your primary query check or list?** If your application mostly checks individual permissions ("can this user edit this document?"), any system works. If your application primarily lists authorized resources ("show me all documents I can see"), you need either co-located data (RBAC with SQL joins) or materialized permission views.
+
+**Can you afford the data synchronization overhead?** Centralizing authorization means duplicating authorization-relevant data into a separate store. If you're a small team with a monolith, this overhead may exceed the benefit. If you're running 20+ microservices with shared authorization rules, centralization pays for itself.
+
+<Mermaid
+  caption="A decision tree for choosing an authorization architecture. The shape of your permission model determines which structural approach fits."
+  chart={`graph LR
+    A{"Permission\nhierarchy?"} -->|"Flat roles"| B["RBAC\n+ SQL"]
+    A -->|"Nested\nrelationships"| C{"Primary\nquery?"}
+    A -->|"Arbitrary\nconditions"| D["Cedar / OPA"]
+    C -->|"Mostly\nchecks"| E["Zanzibar\n(SpiceDB/OpenFGA)"]
+    C -->|"Mostly\nlisting"| F{"Can afford\nsync overhead?"}
+    F -->|"Yes"| G["Zanzibar +\nMaterialized views"]
+    F -->|"No"| H["Embedded ReBAC\n(Oso / Cerbos)"]`}
+/>
+
+<Callout type="in-practice">
+
+**The hybrid reality**: Most production systems at scale end up hybrid. Carta uses Zanzibar-style tuples for resource permissions but RBAC for coarse organization-level access. Many teams use OPA for infrastructure policy and SpiceDB for application authorization. The Permit.io "State of Authorization 2025" survey found that 62% of teams still use custom in-house solutions, suggesting the ecosystem hasn't fully converged on a standard stack yet.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Match the authorization system to the shape of your permission data, not to the vendor with the best marketing page.
+
+</Callout>
+
+<Details title="Side-by-side comparison: when to use what">
+
+| Dimension | RBAC (SQL) | Zanzibar (SpiceDB/OpenFGA) | Cedar | OPA |
+|---|---|---|---|---|
+| Best for | Flat roles, small-medium scale | Nested relationships, sharing, collaboration | Compliance-heavy, provable policies | Infrastructure policy, K8s admission |
+| Check latency | ~1ms (SQL query) | ~5-10ms (graph traversal) | ~1-2ms (policy evaluation) | ~1-5ms (Rego evaluation) |
+| List performance | Excellent (SQL JOIN) | Moderate (LookupResources) | Poor (needs pre-computation) | Poor (needs pre-computation) |
+| Data location | Application DB | Separate tuple store | Policy store + app context | Policy bundle + JSON input |
+| Consistency | Transactional (same DB) | Configurable (ZedTokens) | Deterministic (no state) | Depends on data freshness |
+| Formal guarantees | None | None | Provable properties | Limited (Rego type checking) |
+| Operational cost | Low (use existing DB) | High (separate service + sync) | Medium (policy management) | Medium (sidecar management) |
+| Breaking point | Role explosion (~50+ roles) | Graph depth + list queries | Relationship traversal | Policy bundle size (~10K+) |
+
+</Details>
+
+## The Convergence Thesis: Authorization Is Becoming Infrastructure
+
+Here's the interesting structural observation that most comparisons miss.
+
+Authorization is following the exact trajectory of databases, queues, and observability. It starts as application code (hand-rolled `if` statements), matures into libraries (role middleware), becomes a service (SpiceDB, OpenFGA), and will eventually become infrastructure you don't think about, like how most teams don't think about their database engine's B-tree implementation.
+
+Three signals suggest we're in the "becoming a service" phase with infrastructure on the horizon:
+
+**Signal 1: CNCF gravity.** OpenFGA reaching CNCF Incubation (October 2025) is the same stage that Prometheus, Envoy, and Helm passed through before becoming standard infrastructure. Authorization is joining the cloud-native stack, not as an application concern but as a platform layer.
+
+**Signal 2: Standards emergence.** The OpenID AuthZEN working group is defining interoperability standards for authorization APIs. When Cerbos, Permit.io, and Topaz all pass the same interop tests, we're approaching the "authorization interface" that lets you swap implementations, the same way S3 compatibility lets you swap object stores.
+
+**Signal 3: Formal methods going mainstream.** Cedar's verification-guided development isn't just an academic exercise. It's AWS telling the market that authorization logic should be provable, not just testable. When the provability tooling matures (and the Cedar Analysis tools are a first step), authorization policies become auditable artifacts rather than opaque code.
+
+The convergence point is a system that combines Zanzibar's relationship model, Cedar's analyzability, and co-located evaluation that avoids the data sync tax. Nobody has built this yet. But the components exist, and the economic pressure (62% of teams still building custom solutions) suggests the market is waiting for it.
+
+<Callout type="in-practice">
+
+**The 62% opportunity**: Permit.io's State of Authorization survey found that 62.2% of developers have built custom in-house authorization solutions. Only 27.1% have tried ReBAC. This isn't because ReBAC is bad. It's because the ecosystem hasn't made it easy enough for the average team. The winner in authorization infrastructure will be the system that makes the custom-to-managed migration as painless as "add Stripe" was for payments.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Authorization is becoming infrastructure, following the same path as databases and observability. The question isn't whether to adopt a dedicated system, but when your team will hit the complexity threshold that makes it unavoidable.
+
+</Callout>
+
+## Key Takeaways
+
+- **Authorization is a data modeling problem, not a security feature.** The shape of your permission data (flat, relational, conditional) determines which structural approach works. Tables for flat roles, graphs for nested relationships, policy trees for arbitrary conditions.
+
+- **Zanzibar solved the graph problem at Google scale.** Its relation-tuple model and consistency guarantees (via zookies/ZedTokens) are replicated by SpiceDB, OpenFGA, and Permify. But the Zanzibar paper's hardest innovations (Leopard indexing, TrueTime-backed consistency) don't fully translate to open-source implementations.
+
+- **Cedar solved the provability problem.** Formal verification for authorization policies is a genuine breakthrough, not marketing. The 25 bugs found during verification-guided development could not have been caught by testing.
+
+- **The list API is the real battleground.** Every system can check a single permission quickly. Listing all resources a user can access is where architectures diverge and performance falls apart.
+
+- **Data synchronization is the hidden cost of centralization.** Externalizing authorization means duplicating application data in the authorization store. The sync pipeline is the most operationally expensive and failure-prone part of any centralized authorization deployment.
+
+- **Authorization is becoming infrastructure.** CNCF adoption, interop standards, and formal methods are moving authorization from "application concern" to "platform layer." The 62% of teams still building custom solutions will eventually migrate, just as most teams eventually migrated from hand-rolled job queues to dedicated message brokers.
+
+### Further Reading
+
+**Start here:**
+- The original [Zanzibar paper](https://www.usenix.org/system/files/atc19-pang.pdf) — surprisingly readable for a USENIX paper, and understanding it makes every open-source implementation more comprehensible.
+- Oso's ["Why Authorization Is Hard"](https://osohq.com/post/why-authorization-is-hard) — the best non-vendor-biased framing of the problem space.
+
+**Go deeper:**
+- The [Cedar paper](https://arxiv.org/pdf/2403.04651) — formal methods applied to authorization, with real bug-finding results.
+- AuthZed's ["New Enemy Problem" post](https://authzed.com/blog/new-enemies/) — the consistency challenge that separates toy authorization from production authorization.
+- Airbnb's [Himeji writeup](https://medium.com/airbnb-engineering/himeji-a-scalable-centralized-system-for-authorization-at-airbnb-341664924574) — the most honest account of what centralizing authorization actually costs at scale.

@@ -1,0 +1,238 @@
+---
+title: "You Pin Your Versions and Still Need a Lock File. Here's Why."
+subtitle: "Version pinning controls one layer of a problem that has four. Lock files solve the other three."
+date: 2026-05-24
+tags: ["dependency-management", "supply-chain", "devtools", "package-managers"]
+readTime: "10 min"
+---
+
+import Callout from "../../components/blog/Callout.astro";
+import Mermaid from "../../components/blog/Mermaid.astro";
+import Details from "../../components/blog/Details.astro";
+
+## The Build That Worked Yesterday
+
+You pin every dependency to an exact version. `"react": "18.2.0"`, not `"^18.2.0"`. You feel safe. Deterministic. Locked down.
+
+Monday morning, CI fails. Nothing in your code changed. Nobody touched package.json. But a dependency of a dependency published a new release over the weekend, and your resolver picked it up. Your pinned versions didn't save you because you only pinned the first layer.
+
+This happens constantly. And it's not the only problem lock files solve. It's not even the most interesting one.
+
+<Callout type="takeaway">
+
+Pinning controls your direct dependencies. The other 95% of your dependency tree is unprotected.
+
+</Callout>
+
+## What Pinning Actually Controls
+
+Version pinning means writing `"lodash": "4.17.21"` instead of `"^4.17.21"`. It locks the exact version of packages you directly depend on. That's it.
+
+The average npm project has 85+ direct and transitive dependencies. A typical React app pulls in 800–1500 packages total. If you have 30 direct dependencies and pin all of them, you've controlled maybe 3% of your actual installed packages.
+
+The other 97% are chosen by the resolver at install time, based on the version ranges declared by your dependencies' dependencies' dependencies. You don't control those ranges. Their authors do. And they almost always use floating ranges like `^` or `~`, because that's what semver encourages.
+
+<Callout type="definition">
+
+**Transitive dependency**: a package you don't directly depend on, but that gets installed because something you depend on requires it. In npm, transitive deps outnumber direct deps by 10–50x in most real projects.
+
+</Callout>
+
+<Mermaid
+  caption="What you pin vs. what you don't. The tree fans out fast."
+  chart={`graph LR
+    A["Your package.json\n(pinned)"] --> B["react 18.2.0\n✓ You control this"]
+    A --> C["next 14.1.0\n✓ You control this"]
+    B --> D["loose-envify ^1.1.0\n✗ React controls this"]
+    C --> E["postcss ^8.4.31\n✗ Next controls this"]
+    C --> F["styled-jsx ^5.1.1\n✗ Next controls this"]
+    E --> G["nanoid ^3.3.6\n✗ PostCSS controls this"]
+    E --> H["picocolors ^1.0.0\n✗ PostCSS controls this"]
+    F --> I["client-only 0.0.1\n✗ styled-jsx controls this"]`}
+/>
+
+<Callout type="takeaway">
+
+Pinning is a local decision. Transitive dependencies are governed by upstream authors, not by you.
+
+</Callout>
+
+## The Four Problems Lock Files Solve
+
+A lock file isn't redundant with pinning. It solves four distinct problems, only one of which overlaps with version pinning at all.
+
+**1. Transitive resolution snapshot.** Records the exact version chosen for every package in the tree — including the hundreds you never mentioned in package.json.
+
+**2. Tree shape determinism.** Even with the same versions, different resolution algorithms produce different tree layouts. npm, yarn, and pnpm will install different `node_modules` structures for identical inputs. The lock file records one specific valid arrangement so every machine gets the same one.
+
+**3. Integrity verification.** Stores cryptographic hashes (SHA-512) for every downloaded tarball. If a registry serves different bytes for the same version (compromised account, registry attack, CDN poisoning), the hash mismatch stops the install.
+
+**4. Source pinning.** Records where each package was resolved from — which registry, which URL. Prevents silent registry swaps or namespace confusion attacks.
+
+<Mermaid
+  caption="Where pinning and lock files overlap — and where they don't."
+  chart={`graph LR
+    P["Version pinning"] --> L1["Direct versions ✓"]
+    LF["Lock file"] --> L1
+    LF --> L2["Transitive versions ✓"]
+    LF --> L3["Tree shape ✓"]
+    LF --> L4["Integrity hashes ✓"]
+    LF --> L5["Source URLs ✓"]`}
+/>
+
+<Callout type="gotcha">
+
+Even if you pin every direct dependency AND every transitive dependency in a monorepo-style `overrides` field, you still don't get integrity hashes or source pinning. A compromised registry can serve different code for the same version string. Without hashes, you'd never know.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Pinning solves 1 of 4 problems. Lock files solve all four, including the one pinning covers.
+
+</Callout>
+
+## Resolution Is Non-Deterministic (and NP-Complete)
+
+Here's where it gets interesting. Dependency resolution isn't just complicated — it's provably [NP-complete](https://research.swtch.com/version-sat). Russ Cox showed you can reduce the problem to 3-SAT: given a set of version constraints, finding a satisfying assignment is as hard as any problem in NP.
+
+In practice, this means package managers use heuristics. npm's deduplication algorithm picks "good enough" trees, not optimal ones. And those heuristics differ between tools and between versions of the same tool.
+
+A [deps.dev analysis](https://queue.acm.org/detail.cfm?id=3723000) found that webpack 5.94.0 has approximately 6.2×10^42 possible valid dependency graphs. That's not a typo. The exact graph you get depends on: which tool you use (npm vs yarn vs pnpm), what version of that tool, what other packages are being resolved alongside it, and what versions exist on the registry that day.
+
+Lock files collapse this combinatorial explosion into one answer.
+
+<Callout type="definition">
+
+**NP-complete**: a class of problems where verifying a solution is fast, but finding one may take exponential time. Dependency resolution belongs here because satisfying all version constraints simultaneously is equivalent to solving Boolean satisfiability.
+
+</Callout>
+
+<Details title="How modern resolvers tame NP-completeness">
+
+Modern tools like uv (Python) and Dart's pub use [PubGrub](https://nex3.medium.com/pubgrub-2fb6470504f), an algorithm inspired by Conflict-Driven Clause Learning (CDCL) from SAT solvers. PubGrub works incrementally: pick a package, choose the best compatible version, propagate constraints, backtrack on conflict.
+
+In practice, most real-world dependency graphs resolve in milliseconds because constraints aren't adversarial — but the theoretical worst case is still exponential.
+
+This is also why different tools produce different valid solutions: they traverse the search space in different orders and apply different heuristics for "best" version (newest? most compatible? least change?).
+
+</Details>
+
+<Callout type="takeaway">
+
+The resolver's job is computationally intractable. Lock files save the answer so you never re-solve it.
+
+</Callout>
+
+## The Pinning Paradox
+
+Here's where the conventional wisdom breaks down. A [2025 paper titled "Pinning Is Futile"](https://arxiv.org/html/2502.06662v1) ran counterfactual simulations across the npm ecosystem and found that pinning direct dependencies can actually *increase* your exposure to malicious updates for projects with 498+ total dependencies (26% of GitHub repos in their dataset).
+
+Why? Because npm's deduplication heuristics behave differently when direct deps are pinned. Pinning removes "flexibility" from the resolver, forcing it to install additional versions of shared transitive deps that would otherwise be deduplicated. More installed versions means more distinct packages that could be compromised.
+
+Lock files sidestep this entirely. They don't change how the resolver behaves — they freeze whatever answer the resolver produced, regardless of the pinning strategy in package.json.
+
+| Strategy | Controls directs? | Controls transitives? | Integrity? | Reproducible tree? | Maintenance cost |
+|---|---|---|---|---|---|
+| Float (`^`) | Range only | No | No | No | Low |
+| Pin (exact) | Yes | No | No | No | High |
+| Lock file (committed) | Yes | Yes | Yes | Yes | Medium |
+| Lock + `npm ci` | Yes | Yes | Yes | Yes (enforced) | Medium |
+
+<Callout type="gotcha">
+
+Pinning direct deps increases dependency conflicts and bloat in npm's flat `node_modules`. When your pinned version of `lodash` conflicts with a transitive dep's range, npm installs both — doubling disk usage and potentially loading different versions at runtime.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Pinning is a versioning strategy with tradeoffs. Lock files are an orthogonal mechanism that captures any strategy's output.
+
+</Callout>
+
+## When the Lock File Saved You (and When It Didn't)
+
+**The event-stream attack (2018).** An attacker social-engineered maintainer access to `event-stream`, added a malicious transitive dependency (`flatmap-stream`), and published it as a patch release. Any project with a floating range on `event-stream` pulled in the backdoored code on next install. Projects with a committed lock file were immune until they explicitly ran `npm install` and accepted the update.
+
+**The left-pad deletion (2016).** A maintainer unpublished a package that thousands of projects depended on transitively. Builds broke worldwide within minutes. Projects with lock files kept building — the lock referenced a specific tarball, and npm's registry caching served it even after unpublication. (npm later changed policy to prevent unpublishing after 24 hours.)
+
+**Lock file poisoning (the counter-case).** Lock files themselves can be attack vectors. Because they're auto-generated and often hidden in PR diffs, an attacker who gains commit access can modify resolved URLs or hashes to point at malicious packages. GitHub and GitLab collapse auto-generated file diffs by default — most reviewers never see the change.
+
+<Callout type="in-practice">
+
+Enable lockfile-only CI installs (`npm ci`, `yarn --frozen-lockfile`, `pnpm install --frozen-lockfile`). These commands fail if the lock file doesn't match package.json, preventing "drift" where a developer's local install silently updates transitives without committing the change.
+
+</Callout>
+
+<Callout type="gotcha">
+
+Never approve a PR that modifies only the lock file without a corresponding package.json change. Legitimate dependency updates touch both files. A lock-only change is either accidental drift or a potential poisoning attempt.
+
+</Callout>
+
+## How Different Ecosystems Handle This
+
+Every ecosystem has arrived at lock files, but through different design philosophies.
+
+**npm / yarn / pnpm (JavaScript):** Single lock file captures versions, tree shape, integrity hashes, and registry URLs. Each tool produces a different file format and different tree layouts for identical inputs. The lock file is the source of truth for `ci` installs.
+
+**Go (go.mod + go.sum + sumdb):** Split design. `go.mod` pins versions (including transitives, via `go mod tidy`). `go.sum` is purely checksums — it verifies integrity but doesn't control resolution. The checksum database (`sum.golang.org`) is a public transparency log that guarantees all users get the same bytes for a given module version. This is the most architecturally principled approach in production today.
+
+**Rust (Cargo.lock):** TOML-based, flat, sorted alphabetically. Each package is an independent block — merges cleanly in git. Cargo uses the "minimum version selection" principle: prefer the lowest version that satisfies constraints, giving you changes only when you ask.
+
+**Python (uv.lock / poetry.lock):** Historically chaotic (pip freeze, requirements.txt). uv (2024–2026) brought a proper lock file with PubGrub-based resolution, cross-platform markers, and integrity hashes. The fastest-moving space right now.
+
+**Bun (bun.lock):** Binary-optimized format for install speed. Incompatible with other managers. Sacrifices readability and diffability for 4–5x faster installs.
+
+<Mermaid
+  caption="Design dimensions where ecosystems diverge."
+  chart={`graph LR
+    subgraph "Resolution strategy"
+      A["Newest matching\n(npm, pip, Cargo)"]
+      B["Minimum version\n(Go)"]
+    end
+    subgraph "Verification strategy"
+      C["Local hashes\nin lock file"]
+      D["Global transparency\nlog (Go sumdb)"]
+    end
+    subgraph "Format strategy"
+      E["Flat, mergeable\n(Cargo, go.sum)"]
+      F["Nested/structured\n(npm JSON)"]
+      G["Binary\n(Bun)"]
+    end`}
+/>
+
+<Callout type="in-practice">
+
+If you're choosing a new package manager in 2026: pnpm gives you the strictest isolation (no phantom dependencies), the fastest installs after Bun, and a YAML lock file that diffs and merges better than npm's JSON. Go's model is the gold standard architecturally, but it requires a global verification infrastructure that no JS tool has replicated yet.
+
+</Callout>
+
+<Callout type="takeaway">
+
+Go's split design (pin + verify + public transparency) is the state of the art. Most ecosystems are converging toward similar guarantees with different formats.
+
+</Callout>
+
+## The Bottom Line
+
+Five things to remember:
+
+1. **Pinning controls one layer.** Your package.json has 30 entries. Your lock file has 1200. The 1170 you don't control are the ones that break you.
+
+2. **Same versions does not mean same tree.** Resolution is NP-complete and non-deterministic. Different tools, different days, different results. The lock file picks one answer and freezes it.
+
+3. **Integrity hashes are non-negotiable.** A version string is a name, not a guarantee. The registry can serve different bytes. Only hashes verify you got what you tested.
+
+4. **Lock files complement pinning, not compete with it.** Use floating ranges for flexibility in package.json. Use the lock file for reproducibility. Use `npm ci` to enforce it.
+
+5. **Review lock file changes in PRs.** They're auto-generated but not inherently trustworthy. Lock-only changes without package.json edits are a code smell.
+
+### Further Reading
+
+- [The Surprise of Multiple Dependency Graphs](https://queue.acm.org/detail.cfm?id=3723000) — Start here. ACM Queue paper that makes the non-determinism problem visceral with the webpack example.
+- [Pinning Is Futile (FSE 2025)](https://arxiv.org/html/2502.06662v1) — Go deeper. Quantitative evidence that pinning direct deps can backfire for supply chain security.
+- [Lockfile Format Design and Tradeoffs](https://nesbitt.io/2026/01/17/lockfile-format-design-and-tradeoffs.html) — Go wider. Compares every major lock file format on mergeability, determinism, and tooling compatibility.
+- [Proposal: Secure the Public Go Module Ecosystem](https://go.googlesource.com/proposal/+/master/design/25530-sumdb.md) — The architectural frontier. How Go's transparency log provides guarantees no local lock file can.
+- [Version SAT (Russ Cox)](https://research.swtch.com/version-sat) — The proof that dependency resolution is NP-complete. Short, readable, and satisfying.
