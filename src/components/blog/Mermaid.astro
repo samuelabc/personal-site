@@ -1,13 +1,24 @@
 ---
+import { renderMermaidSVG } from 'beautiful-mermaid'
+import { mermaidTheme } from '../../data/mermaid-theme'
+
 interface Props {
-  caption?: string;
-  chart: string;
+  caption?: string
+  chart: string
 }
 
-const { caption, chart } = Astro.props;
+const { caption, chart } = Astro.props
+
+function preprocessChart(input: string): string {
+  return input.replace(/(\["[^"]*"\]|\{"[^"]*"\}|\|"[^"]*"\|)/gs, (match) =>
+    match.replace(/\n/g, '<br/>')
+  )
+}
+
+const svg = renderMermaidSVG(preprocessChart(chart), mermaidTheme)
 ---
 
-<div class="mermaid-wrapper">
-  <pre class="mermaid">{chart}</pre>
-  {caption && <p class="mermaid-caption">{caption}</p>}
-</div>
+<figure class="mermaid-figure">
+  <Fragment set:html={svg} />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

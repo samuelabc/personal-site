@@ -187,16 +187,17 @@ Every ecosystem has arrived at lock files, but through different design philosop
 
 <Mermaid
   caption="Design dimensions where ecosystems diverge."
-  chart={`graph LR
-    subgraph "Resolution strategy"
+  chart={`graph TD
+    Root["Lock file design"] --> res & ver & fmt
+    subgraph res["Resolution"]
       A["Newest matching\n(npm, pip, Cargo)"]
       B["Minimum version\n(Go)"]
     end
-    subgraph "Verification strategy"
+    subgraph ver["Verification"]
       C["Local hashes\nin lock file"]
       D["Global transparency\nlog (Go sumdb)"]
     end
-    subgraph "Format strategy"
+    subgraph fmt["Format"]
       E["Flat, mergeable\n(Cargo, go.sum)"]
       F["Nested/structured\n(npm JSON)"]
       G["Binary\n(Bun)"]

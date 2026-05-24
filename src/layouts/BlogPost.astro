@@ -136,43 +136,6 @@ const showToc = tocHeadings.length >= 2;
         });
       }
 
-      function resolveColor(cssColor) {
-        var cv = document.createElement('canvas');
-        cv.width = cv.height = 1;
-        var cx = cv.getContext('2d');
-        cx.fillStyle = cssColor;
-        cx.fillRect(0, 0, 1, 1);
-        var d = cx.getImageData(0, 0, 1, 1).data;
-        return d[3] < 255
-          ? 'rgba(' + d[0] + ',' + d[1] + ',' + d[2] + ',' + (d[3] / 255).toFixed(2) + ')'
-          : '#' + Array.from(d).slice(0, 3).map(function(c) { return c.toString(16).padStart(2, '0'); }).join('');
-      }
-
-      async function initMermaid() {
-        var mermaidDivs = document.querySelectorAll('.mermaid');
-        if (mermaidDivs.length === 0) return;
-
-        var mod = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
-        var mermaid = mod.default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'base',
-          themeVariables: {
-            primaryColor: resolveColor('oklch(96% 0.02 150)'),
-            primaryTextColor: resolveColor('oklch(22% 0.015 160)'),
-            primaryBorderColor: resolveColor('oklch(48% 0.10 150)'),
-            lineColor: resolveColor('oklch(48% 0.10 150)'),
-            secondaryColor: resolveColor('oklch(72% 0.08 230 / 0.15)'),
-            tertiaryColor: resolveColor('oklch(78% 0.13 85 / 0.15)'),
-            clusterBkg: resolveColor('oklch(96% 0.01 150 / 0.4)'),
-            clusterBorder: resolveColor('oklch(48% 0.10 150 / 0.4)'),
-            titleColor: resolveColor('oklch(22% 0.015 160)'),
-            fontFamily: '"Libre Franklin", sans-serif',
-            fontSize: window.innerWidth < 640 ? '16px' : '14px',
-          },
-        });
-        await mermaid.run({ nodes: mermaidDivs });
-      }
 
       var tocObserver = null;
       var scrollHandler = null;
@@ -253,7 +216,6 @@ const showToc = tocHeadings.length >= 2;
 
       function init() {
         wrapTables();
-        initMermaid();
         initToc();
       }
 
