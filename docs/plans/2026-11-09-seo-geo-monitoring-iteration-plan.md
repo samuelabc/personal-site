@@ -316,13 +316,13 @@ expect Absent across the board at baseline — that is the honest zero.
 
 ## 10. Definition of done for this plan's execution
 
-- [ ] Sitemap submitted and Success in GSC (Phase 0.1) — **manual, pending Samuel** (MCP read-only, 403 verified)
-- [x] `/llms.txt` serves real content; robots welcomes AI crawlers (0.3, 0.5) — in code, pending deploy
-- [x] Every post emits `BlogPosting` JSON-LD + per-post OG image (1.1, 1.3) — verified in local build
-- [x] Every post links to ≥2 related posts (1.4); canonicals normalised (1.5) — verified: 3–5 internal links/post
-- [x] `scripts/seo-check.mjs` runs clean (1.6) — ✅ PASS locally (19/19); production still shows 43 failures until deploy, which is the expected before/after delta
-- [x] First weekly report under `docs/seo/reports/2026-11-09.md`; GEO panel tracker created (baseline run pending deploy)
-- [ ] Manual indexing requests queued for Samuel in GSC UI (0.2 — user action)
+- [x] Sitemap submitted and Success in GSC (Phase 0.1) — `get_sitemaps` 2026-11-09: `sitemap-index.xml`, Valid, 0 errors, downloaded 07:12 UTC (MCP itself is read-only, 403 verified; submission registered at deploy time)
+- [x] `/llms.txt` serves real content; robots welcomes AI crawlers (0.3, 0.5) — live: `text/plain`, starts `# Samuel Thien`
+- [x] Every post emits `BlogPosting` JSON-LD + per-post OG image (1.1, 1.3) — verified live in production
+- [x] Every post links to ≥2 related posts (1.4); canonicals normalised (1.5) — live: 3–5 internal links/post
+- [x] `scripts/seo-check.mjs` runs clean (1.6) — production **✅ PASS 19/19** (was 43 failures pre-deploy); unknown URLs now return real 404
+- [x] First weekly report under `docs/seo/reports/2026-11-09.md`; GEO panel tracker created (baseline run now unblocked)
+- [ ] Manual indexing requests for Samuel in GSC UI (0.2 — user action; sitemap crawl may also do this over days)
 
 ## 11. Execution log
 
@@ -332,4 +332,8 @@ expect Absent across the board at baseline — that is the honest zero.
 | 2026-11-09 | `submit_sitemap` via MCP attempted | `403 insufficient authentication scopes` — sitemap submission is manual |
 | 2026-11-09 | Phase 0/1 code shipped (uncommitted on `main`) | `pnpm exec astro build` ✅ (20 pages, 12 new `/og/writing/*.png`); `node scripts/seo-check.mjs --base http://localhost:4321` ✅ PASS |
 | 2026-11-09 | Production check (pre-deploy) | `node scripts/seo-check.mjs --no-write` → 43 failures — the quantified deploy delta |
-| Next | Deploy → re-run `pnpm seo:check` on production → submit sitemap (GSC UI) → Request Indexing → weekly cadence starts | Plan §4 |
+| 2026-11-09 | Committed + pushed | `6e3c5f7 feat(seo): fix discovery, add Article schema, llms.txt and weekly SEO check` → `origin/main` (GitHub) |
+| 2026-11-09 | Deployed (Cloudflare Pages) | New build live ~75s after push; `/llms.txt` flipped from homepage HTML to real text at ~07:12 UTC |
+| 2026-11-09 | Production verification | `pnpm seo:check` → **✅ PASS 19/19**; unknown URL → 404; `/og/writing/mcp-security.png` → 200 image/png; sitemap = 19 URLs |
+| 2026-11-09 | GSC re-verification | Sitemap Valid, 0 errors, downloaded 2026-11-09 07:12; posts still "unknown to Google" — crawl pending (expected) |
+| Next | Request Indexing (user, GSC UI) → weekly report 2026-11-16 → indexing sweep 2026-11-23 → GEO panel baseline | Plan §4, §7 |
