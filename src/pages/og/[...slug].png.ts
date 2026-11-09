@@ -1,7 +1,7 @@
 import type { APIRoute, GetStaticPaths } from "astro";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { books } from "../../data/books";
 
@@ -52,6 +52,23 @@ export const getStaticPaths: GetStaticPaths = () => {
         title: book.title,
         subtitle: book.author,
       },
+    });
+  }
+
+  // Per-post OG images for writing: parse MDX frontmatter at build time.
+  const writingDir = join(process.cwd(), "src/content/writing");
+  for (const file of readdirSync(writingDir).filter((f) => f.endsWith(".mdx"))) {
+    const raw = readFileSync(join(writingDir, file), "utf-8");
+    const frontmatter = raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+    const readField = (name: string) =>
+      frontmatter
+        .match(new RegExp(`^${name}:\\s*"([^"]*)"`, "m"))?.[1]
+        ?.replace(/\\"/g, '"') ?? "";
+    const title = readField("title");
+    if (!title) continue;
+    pages.push({
+      params: { slug: `writing/${file.replace(/\.mdx$/, "")}` },
+      props: { title, subtitle: readField("subtitle") },
     });
   }
 

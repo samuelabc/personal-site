@@ -1,0 +1,42 @@
+# Samuel Thien
+
+> Samuel Thien is a full stack engineer based in Kuala Lumpur, currently at Mercedes-Benz. He builds backend systems and web apps with Go, TypeScript, and React, and writes in-depth technical posts on distributed systems, reliability, security, and AI agent tooling.
+
+Site: https://samuelthien.site
+GitHub: https://github.com/samuelabc
+LinkedIn: https://linkedin.com/in/samuel-thien-18b9071ab
+
+## Writing (technical blog)
+
+- [Exactly-Once Is a Lie (Sort Of)](https://samuelthien.site/writing/exactly-once-is-a-lie/): Why two smart people can disagree about whether exactly-once is possible, and both be right.
+- [You're Already Building a Workflow Engine](https://samuelthien.site/writing/durable-execution-in-practice/): How durable execution replaces state machines, retry loops, and reconciliation crons, and the new problems it creates.
+- [Five Ways to Make a Message Survive](https://samuelthien.site/writing/durable-messaging-deep-dive/): The message isn't the hard part. Keeping the context alive is.
+- [So You Want to Build an Idempotent Service](https://samuelthien.site/writing/idempotent-service/): From f(f(x)) = f(x) to production middleware, three strategies for not doing things twice.
+- [Tool Descriptions Are Code: MCP Security from First Principles](https://samuelthien.site/writing/mcp-security/): Why a protocol backed by Anthropic accumulated 16 CVEs in its first year, and what that means for anyone connecting tools to an LLM.
+- [Your AI Agent's 'Plugin' Is Just a Markdown File (And That's the Point)](https://samuelthien.site/writing/ai-agent-plugins-compared/): How Cursor, Claude Code, and Codex extend their agents, and why the business strategy matters more than the implementation.
+- [Everything Your Agent Reads Is Code](https://samuelthien.site/writing/agent-trust-surface/): Why cloning a repo, installing a skill, or opening a PR can silently compromise your machine.
+- [Your Agent Runs Code You Didn't Write: A Field Guide to Runtime Isolation](https://samuelthien.site/writing/agent-runtime-isolation/): Containers, microVMs, OS sandboxes, and WASM, what each actually enforces at the kernel level, and a decision tree for choosing.
+- [Authorization Is a Graph Problem (And Most Teams Solve It Like a Table Problem)](https://samuelthien.site/writing/authorization-graph-problem/): From Zanzibar to Cedar, how modern authorization actually works, where each approach breaks, and which tradeoffs you're really making.
+- [Your System Can't Survive Its Own Control Plane](https://samuelthien.site/writing/control-plane-data-plane/): The availability pattern hiding in every major outage, and the design decisions that make or break it.
+- [TLS 1.3 Removed Half the Protocol. The Web Got More Secure.](https://samuelthien.site/writing/tls-handshake-redesign/): How removing cipher suites, round trips, and decades of backwards compatibility made every connection on the Internet safer.
+- [You Pin Your Versions and Still Need a Lock File. Here's Why.](https://samuelthien.site/writing/why-lock-files/): Version pinning controls one layer of a problem that has four. Lock files solve the other three.
+- [All writing](https://samuelthien.site/writing/): Index of all technical posts.
+
+## Talks
+
+- [Talks](https://samuelthien.site/talks/): Slide decks on distributed systems and durable execution, including "Consistency Models in Distributed Systems" and "Durable Execution: An Introduction".
+
+## Bookshelf
+
+- [Bookshelf](https://samuelthien.site/bookshelf/): Books that shaped how Samuel thinks about software and systems, with notes.
+- [Designing Data-Intensive Applications by Martin Kleppmann](https://samuelthien.site/bookshelf/designing-data-intensive-applications/)
+- [The Beginning of Infinity by David Deutsch](https://samuelthien.site/bookshelf/the-beginning-of-infinity/)
+- [Building Evolutionary Architectures by Neal Ford, Rebecca Parsons & Patrick Kua](https://samuelthien.site/bookshelf/building-evolutionary-architectures/)
+
+## Projects
+
+Selected work includes YoTalent (AI hackathon champion at Mercedes), ReplyHero (auto-reply SaaS, cofounded), AI PR Review (VSCode extension), and datetime-helper. See the homepage for details.
+
+## Contact
+
+Start a conversation via the homepage: https://samuelthien.site/

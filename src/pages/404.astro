@@ -1,0 +1,23 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="Page not found — Samuel Thien"
+  description="That page doesn't exist. Try the writing index, bookshelf, or talks instead."
+  canonicalPath="/404/"
+  noindex
+>
+  <section class="py-16 sm:py-24">
+    <h1 class="font-display text-3xl sm:text-4xl font-bold mb-4">Page not found</h1>
+    <p class="text-ink-soft leading-relaxed max-w-[600px] mb-8">
+      That URL doesn't exist on this site. You might be looking for one of these:
+    </p>
+    <ul class="flex flex-col gap-2 font-ui text-sm">
+      <li><a href="/writing/" class="text-accent hover:underline">Writing</a> — technical posts on distributed systems</li>
+      <li><a href="/bookshelf/" class="text-accent hover:underline">Bookshelf</a> — books and notes</li>
+      <li><a href="/talks/" class="text-accent hover:underline">Talks</a> — slide decks</li>
+      <li><a href="/" class="text-accent hover:underline">Home</a></li>
+    </ul>
+  </section>
+</Base>

@@ -24,7 +24,10 @@ function serveSpaFallback() {
 
 export default defineConfig({
   site: "https://samuelthien.site",
-  integrations: [sitemap(), mdx()],
+  integrations: [
+    sitemap({ filter: (page) => !page.includes("/404") }),
+    mdx(),
+  ],
   vite: {
     plugins: [tailwindcss(), serveSpaFallback()],
   },

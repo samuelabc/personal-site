@@ -15,13 +15,37 @@ interface Props {
 
 const { book } = Astro.props;
 const stars = "\u2605".repeat(book.rating) + "\u2606".repeat(5 - book.rating);
+
+const bookDescription =
+  `${book.title} by ${book.author} — ${book.note}`.length > 160
+    ? `${`${book.title} by ${book.author} — ${book.note}`.slice(0, 157).trimEnd()}...`
+    : `${book.title} by ${book.author} — ${book.note}`;
+
+const bookJsonLd: Record<string, unknown> = {
+  "@type": "Book",
+  name: book.title,
+  author: { "@type": "Person", name: book.author },
+  url: `https://samuelthien.site/bookshelf/${book.slug}/`,
+  ...(book.cover ? { image: new URL(book.cover, Astro.site).href } : {}),
+  review: {
+    "@type": "Review",
+    author: { "@type": "Person", name: "Samuel Thien", url: "https://samuelthien.site" },
+    reviewBody: book.note,
+    reviewRating: {
+      "@type": "Rating",
+      ratingValue: book.rating,
+      bestRating: 5,
+    },
+  },
+};
 ---
 
 <Base
   title={`${book.title} — Samuel Thien`}
-  description={`${book.title} by ${book.author}`}
+  description={bookDescription}
   ogImage={`/og/bookshelf/${book.slug}.png`}
-  canonicalPath={`/bookshelf/${book.slug}`}
+  canonicalPath={`/bookshelf/${book.slug}/`}
+  structuredData={bookJsonLd}
 >
   <section class="pt-10 sm:pt-16 pb-20">
     <a

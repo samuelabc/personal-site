@@ -1,16 +1,62 @@
 ---
 import Base from "./Base.astro";
 
+interface RelatedPost {
+  slug: string;
+  title: string;
+  subtitle: string;
+  readTime: string;
+}
+
 interface Props {
   title: string;
   subtitle: string;
   date: Date;
+  updated?: Date;
+  slug: string;
   tags: string[];
   readTime: string;
   headings: Array<{ depth: number; slug: string; text: string }>;
+  related?: RelatedPost[];
 }
 
-const { title, subtitle, date, tags, readTime, headings } = Astro.props;
+const { title, subtitle, date, updated, slug, tags, readTime, headings, related = [] } = Astro.props;
+
+const articleUrl = `https://samuelthien.site/writing/${slug}/`;
+const ogImage = `/og/writing/${slug}.png`;
+
+const articleJsonLd: Record<string, unknown> = {
+  "@type": "BlogPosting",
+  headline: title,
+  description: subtitle,
+  url: articleUrl,
+  mainEntityOfPage: { "@type": "WebPage", "@id": articleUrl },
+  image: new URL(ogImage, Astro.site).href,
+  datePublished: date.toISOString(),
+  dateModified: (updated ?? date).toISOString(),
+  inLanguage: "en",
+  keywords: tags.join(", "),
+  author: {
+    "@type": "Person",
+    name: "Samuel Thien",
+    url: "https://samuelthien.site",
+    jobTitle: "Full Stack Engineer",
+    sameAs: [
+      "https://github.com/samuelabc",
+      "https://linkedin.com/in/samuel-thien-18b9071ab",
+    ],
+  },
+  publisher: {
+    "@type": "Person",
+    name: "Samuel Thien",
+    url: "https://samuelthien.site",
+  },
+  isPartOf: {
+    "@type": "Blog",
+    name: "Samuel Thien — Writing",
+    url: "https://samuelthien.site/writing/",
+  },
+};
 
 const formattedDate = date.toLocaleDateString("en-US", {
   year: "numeric",
@@ -26,7 +72,12 @@ const showToc = tocHeadings.length >= 2;
   title={`${title} — Samuel Thien`}
   description={subtitle}
   canonicalPath={Astro.url.pathname}
+  ogImage={ogImage}
   ogType="article"
+  structuredData={articleJsonLd}
+  articlePublishedTime={date.toISOString()}
+  articleModifiedTime={(updated ?? date).toISOString()}
+  articleTags={tags}
 >
   <article class="py-12 sm:py-16" id="blog-article">
     <header class="mb-10 sm:mb-14 max-w-[720px] mx-auto">
@@ -88,6 +139,28 @@ const showToc = tocHeadings.length >= 2;
     <div class="prose">
       <slot />
     </div>
+
+    {related.length > 0 && (
+      <nav class="max-w-[720px] mx-auto mt-16 sm:mt-20" aria-label="Related posts">
+        <h2 class="font-display text-xl sm:text-2xl font-bold mb-5">Keep reading</h2>
+        <div class="flex flex-col gap-1.5">
+          {related.map((post) => (
+            <a
+              href={`/writing/${post.slug}/`}
+              class="group rounded-xl border border-rule px-5 sm:px-7 py-5 bg-bg-card no-underline text-inherit transition-all duration-400 ease-smooth hover:shadow-[0_4px_20px_oklch(0%_0_0_/_0.05)] hover:border-accent/30"
+            >
+              <span class="font-display text-base sm:text-lg font-bold italic block leading-snug group-hover:text-accent transition-colors duration-250">
+                {post.title}
+              </span>
+              <span class="font-body text-sm text-ink-soft mt-1 block leading-snug">
+                {post.subtitle}
+              </span>
+              <span class="font-ui text-xs text-ink-muted mt-2 block">{post.readTime} read</span>
+            </a>
+          ))}
+        </div>
+      </nav>
+    )}
   </article>
 
   {showToc && (

@@ -3,14 +3,33 @@ import { getCollection, render } from "astro:content";
 import BlogPost from "../../layouts/BlogPost.astro";
 
 export async function getStaticPaths() {
-  const posts = await getCollection("writing");
-  return posts.map((post) => ({
-    params: { slug: post.id },
-    props: { post },
-  }));
+  const posts = (await getCollection("writing", ({ data }) => !data.draft)).sort(
+    (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+  );
+
+  return posts.map((post) => {
+    const related = posts
+      .filter((candidate) => candidate.id !== post.id)
+      .map((candidate) => ({
+        slug: candidate.id,
+        title: candidate.data.title,
+        subtitle: candidate.data.subtitle,
+        readTime: candidate.data.readTime,
+        sharedTags: candidate.data.tags.filter((tag) => post.data.tags.includes(tag)).length,
+        dateValue: candidate.data.date.valueOf(),
+      }))
+      .sort((a, b) => b.sharedTags - a.sharedTags || b.dateValue - a.dateValue)
+      .slice(0, 3)
+      .map(({ slug, title, subtitle, readTime }) => ({ slug, title, subtitle, readTime }));
+
+    return {
+      params: { slug: post.id },
+      props: { post, related },
+    };
+  });
 }
 
-const { post } = Astro.props;
+const { post, related } = Astro.props;
 const { Content, headings } = await render(post);
 ---
 
@@ -18,9 +37,12 @@ const { Content, headings } = await render(post);
   title={post.data.title}
   subtitle={post.data.subtitle}
   date={post.data.date}
+  updated={post.data.updated}
+  slug={post.id}
   tags={post.data.tags}
   readTime={post.data.readTime}
   headings={headings}
+  related={related}
 >
   <Content />
 </BlogPost>
